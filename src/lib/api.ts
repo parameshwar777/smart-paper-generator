@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
@@ -107,7 +107,8 @@ export const paperApi = {
     return response.data;
   },
   downloadPdf: (paperId: number) => {
-    return `${API_BASE_URL}/paper/download/${paperId}`;
+    const base = API_BASE_URL.replace(/\/$/, '');
+    return `${base}/paper/download/${paperId}`;
   },
 };
 
