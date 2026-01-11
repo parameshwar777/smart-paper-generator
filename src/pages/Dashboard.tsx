@@ -46,6 +46,16 @@ export default function Dashboard() {
   const lastPaperId = history.length > 0 ? history[0]?.id : 'N/A';
   const recentPapers = history.slice(0, 5);
 
+  // Calculate AI engine usage from history
+  const aiEngineUsage = history.length > 0 
+    ? history.reduce((acc, paper) => {
+        const engine = paper.ai_engine || 'Unknown';
+        acc[engine] = (acc[engine] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    : {};
+  const mostUsedEngine = Object.entries(aiEngineUsage).sort((a, b) => b[1] - a[1])[0];
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -79,16 +89,15 @@ export default function Dashboard() {
           />
           <StatCard
             title="AI Engine Usage"
-            value="Active"
-            subtitle="OpenAI + Hybrid ML"
+            value={isLoading ? '...' : (mostUsedEngine ? mostUsedEngine[0] : 'N/A')}
+            subtitle={isLoading ? '' : (mostUsedEngine ? `${mostUsedEngine[1]} papers` : 'No data')}
             icon={Brain}
             variant="success"
             delay={0.2}
           />
           <StatCard
-            title="Success Rate"
-            value="99.8%"
-            trend={{ value: 2.5, isPositive: true }}
+            title="Total Marks Generated"
+            value={isLoading ? '...' : history.reduce((acc, p) => acc + (p.total_marks || 0), 0)}
             icon={TrendingUp}
             variant="warning"
             delay={0.3}

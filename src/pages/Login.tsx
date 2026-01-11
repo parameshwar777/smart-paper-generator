@@ -66,23 +66,6 @@ export default function Login() {
             Automated Question Paper Generation powered by advanced AI and Machine Learning
           </motion.p>
 
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-12 grid grid-cols-3 gap-8"
-          >
-            {[
-              { label: 'Papers Generated', value: '10K+' },
-              { label: 'Questions Bank', value: '50K+' },
-              { label: 'Accuracy Rate', value: '99%' },
-            ].map((stat, i) => (
-              <div key={i} className="text-center">
-                <p className="text-2xl font-bold text-primary">{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </motion.div>
         </div>
       </div>
 
