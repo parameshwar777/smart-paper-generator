@@ -89,10 +89,14 @@ export const academicApi = {
 export const paperApi = {
   generate: async (payload: {
     subject_id: number;
+    paper_model_id?: number;
+    ai_engine: string;
+    difficulty_distribution: Record<string, number>;
+    unit_topic_map?: Record<string, string>;
+    marks_map?: Record<string, number>;
+    generated_by?: number;
     unit_ids?: number[];
     topic_ids?: number[];
-    ai_engine: string;
-    difficulty_distribution: { easy: number; medium: number; hard: number };
     total_marks?: number;
   }) => {
     const response = await api.post('/paper/generate', payload);
