@@ -61,11 +61,20 @@ export default function GeneratePaper() {
     }
   }, [isGenerating]);
 
+  // Helper to normalize API response to {id, name} format
+  const normalizeOptions = (data: any[], idKey: string, nameKey: string): SelectOption[] => {
+    if (!Array.isArray(data)) return [];
+    return data.map(item => ({
+      id: item[idKey],
+      name: item[nameKey] || `${nameKey.replace('_name', '').replace('_number', '')} ${item[idKey]}`,
+    }));
+  };
+
   const loadYears = async () => {
     try {
       setIsLoading(true);
       const data = await academicApi.getYears();
-      setYears(Array.isArray(data) ? data : []);
+      setYears(normalizeOptions(data, 'year_id', 'year_number').map(y => ({ ...y, name: `Year ${y.name}` })));
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load years', variant: 'destructive' });
     } finally {
@@ -86,7 +95,7 @@ export default function GeneratePaper() {
 
     try {
       const data = await academicApi.getSemesters(parseInt(yearId));
-      setSemesters(Array.isArray(data) ? data : []);
+      setSemesters(normalizeOptions(data, 'semester_id', 'semester_number').map(s => ({ ...s, name: `Semester ${s.name}` })));
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load semesters', variant: 'destructive' });
     }
@@ -103,7 +112,7 @@ export default function GeneratePaper() {
 
     try {
       const data = await academicApi.getSubjects(parseInt(semesterId));
-      setSubjects(Array.isArray(data) ? data : []);
+      setSubjects(normalizeOptions(data, 'subject_id', 'subject_name'));
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load subjects', variant: 'destructive' });
     }
@@ -118,7 +127,7 @@ export default function GeneratePaper() {
 
     try {
       const data = await academicApi.getUnits(parseInt(subjectId));
-      setUnits(Array.isArray(data) ? data : []);
+      setUnits(normalizeOptions(data, 'unit_id', 'unit_number').map(u => ({ ...u, name: `Unit ${u.name}` })));
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load units', variant: 'destructive' });
     }
@@ -131,7 +140,7 @@ export default function GeneratePaper() {
 
     try {
       const data = await academicApi.getTopics(parseInt(unitId));
-      setTopics(Array.isArray(data) ? data : []);
+      setTopics(normalizeOptions(data, 'topic_id', 'topic_name'));
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load topics', variant: 'destructive' });
     }
@@ -157,8 +166,8 @@ export default function GeneratePaper() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedSubject) {
-      toast({ title: 'Error', description: 'Please select a subject', variant: 'destructive' });
+    if (!selectedSubject || !selectedUnit || !selectedTopic) {
+      toast({ title: 'Error', description: 'Please select subject, unit, and topic', variant: 'destructive' });
       return;
     }
 
@@ -166,13 +175,27 @@ export default function GeneratePaper() {
     setGeneratedPaperId(null);
 
     try {
+      // Get the topic name for the unit_topic_map
+      const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
+      
       const payload = {
         subject_id: parseInt(selectedSubject),
-        unit_ids: selectedUnit ? [parseInt(selectedUnit)] : undefined,
-        topic_ids: selectedTopic ? [parseInt(selectedTopic)] : undefined,
-        ai_engine: aiEngine,
-        difficulty_distribution: difficulty,
-        total_marks: totalMarks,
+        paper_model_id: 1,
+        ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
+        difficulty_distribution: {
+          Easy: Math.round(difficulty.easy / 10),
+          Medium: Math.round(difficulty.medium / 10),
+          Hard: Math.round(difficulty.hard / 10),
+        },
+        unit_topic_map: {
+          [selectedUnit]: topicName,
+        },
+        marks_map: {
+          Easy: 5,
+          Medium: 10,
+          Hard: 15,
+        },
+        generated_by: 1,
       };
 
       const response = await paperApi.generate(payload);
@@ -183,6 +206,7 @@ export default function GeneratePaper() {
         description: 'Question paper generated successfully',
       });
     } catch (error: any) {
+      console.error('Generation error:', error);
       toast({
         title: 'Generation Failed',
         description: error.response?.data?.detail || 'Failed to generate paper',
@@ -528,7 +552,7 @@ export default function GeneratePaper() {
             <motion.div whileHover={{ scale: 1.005 }} whileTap={{ scale: 0.995 }}>
               <Button
                 onClick={handleGenerate}
-                disabled={isGenerating || !selectedSubject}
+                disabled={isGenerating || !selectedSubject || !selectedUnit || !selectedTopic}
                 className="w-full h-14 text-lg shadow-glow"
                 size="lg"
               >
