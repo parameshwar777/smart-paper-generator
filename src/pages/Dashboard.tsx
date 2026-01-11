@@ -156,10 +156,10 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge variant="secondary">
-                          {paper.ai_engine || 'OpenAI'}
+                          {paper.ai_engine ?? 'N/A'}
                         </Badge>
                         <Badge variant="outline">
-                          {paper.total_marks || 100} marks
+                          {paper.total_marks ?? 'N/A'}{paper.total_marks != null ? ' marks' : ''}
                         </Badge>
                         <button
                           onClick={() => navigate(`/paper/${paper.id}`)}

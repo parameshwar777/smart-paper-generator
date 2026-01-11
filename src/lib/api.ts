@@ -37,14 +37,27 @@ api.interceptors.response.use(
 // Auth API
 export const authApi = {
   login: async (username: string, password: string) => {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-    
-    const response = await api.post('/auth/login', formData, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
-    return response.data;
+    // Prefer JSON body (matches typical Swagger "Try it out" payload)
+    try {
+      const response = await api.post('/auth/login', { username, password });
+      return response.data;
+    } catch (err) {
+      const error = err as AxiosError;
+
+      // Fallback for backends using OAuth2PasswordRequestForm (x-www-form-urlencoded)
+      if (error.response?.status === 422) {
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const response = await api.post('/auth/login', formData, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
+        return response.data;
+      }
+
+      throw err;
+    }
   },
 };
 
