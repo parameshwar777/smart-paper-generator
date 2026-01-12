@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { paperApi } from '@/lib/api';
+import { paperApi, academicApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -19,15 +19,38 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+// API response structure
+interface PaperHistoryApi {
+  paper_id: number;
+  subject_id: number;
+  model_id: number;
+  ai_engine_id: number;
+  total_questions: number;
+  total_marks: number;
+  generated_at: string;
+}
+
+// Mapped structure for UI
 interface PaperHistory {
   id: number;
-  subject_name?: string;
-  created_at?: string;
-  total_marks?: number;
-  ai_engine?: string;
-  question_count?: number;
-  difficulty_distribution?: { easy: number; medium: number; hard: number };
+  subject_id: number;
+  subject_name: string;
+  created_at: string;
+  total_marks: number;
+  ai_engine: string;
+  question_count: number;
 }
+
+// Subject cache
+interface Subject {
+  subject_id: number;
+  subject_name: string;
+}
+
+const ENGINE_MAP: Record<number, string> = {
+  1: 'OpenAI',
+  2: 'Rule + ML Hybrid',
+};
 
 export default function PaperHistoryPage() {
   const [papers, setPapers] = useState<PaperHistory[]>([]);
@@ -36,22 +59,56 @@ export default function PaperHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [engineFilter, setEngineFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [subjectsMap, setSubjectsMap] = useState<Record<number, string>>({});
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadPapers();
+    loadData();
   }, []);
 
   useEffect(() => {
     filterPapers();
   }, [papers, searchQuery, engineFilter]);
 
-  const loadPapers = async () => {
+  const loadData = async () => {
     try {
-      const data = await paperApi.getHistory();
-      setPapers(Array.isArray(data) ? data : []);
+      // First fetch all subjects to build a lookup map
+      const years = await academicApi.getYears();
+      const subjectMap: Record<number, string> = {};
+      
+      // Fetch subjects for all years/semesters
+      for (const year of years) {
+        const yearId = year.year_id || year.id;
+        const semesters = await academicApi.getSemesters(yearId);
+        for (const sem of semesters) {
+          const semId = sem.semester_id || sem.id;
+          const subjects = await academicApi.getSubjects(semId);
+          for (const subj of subjects) {
+            const subjId = subj.subject_id || subj.id;
+            subjectMap[subjId] = subj.subject_name || subj.name || `Subject ${subjId}`;
+          }
+        }
+      }
+      setSubjectsMap(subjectMap);
+
+      // Now fetch paper history
+      const data: PaperHistoryApi[] = await paperApi.getHistory();
+      
+      // Map to UI structure
+      const mapped: PaperHistory[] = (Array.isArray(data) ? data : []).map((p) => ({
+        id: p.paper_id,
+        subject_id: p.subject_id,
+        subject_name: subjectMap[p.subject_id] || `Subject ${p.subject_id}`,
+        created_at: p.generated_at,
+        total_marks: p.total_marks,
+        ai_engine: ENGINE_MAP[p.ai_engine_id] || `Engine ${p.ai_engine_id}`,
+        question_count: p.total_questions,
+      }));
+      
+      setPapers(mapped);
     } catch (error) {
+      console.error('Error loading paper history:', error);
       toast({
         title: 'Error',
         description: 'Failed to load paper history',

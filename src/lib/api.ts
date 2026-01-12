@@ -103,7 +103,7 @@ export const paperApi = {
     return response.data;
   },
   getHistory: async () => {
-    const response = await api.get('/paper/history/all');
+    const response = await api.get('/paper/history');
     return response.data;
   },
   getPaper: async (paperId: number) => {

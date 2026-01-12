@@ -6,7 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { paperApi, analyticsApi } from '@/lib/api';
+import { paperApi, analyticsApi, academicApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import {
   PieChart as RechartsPie,
@@ -26,11 +26,27 @@ import {
   Area,
 } from 'recharts';
 
+// API response structure  
+interface PaperHistoryApi {
+  paper_id: number;
+  subject_id: number;
+  model_id: number;
+  ai_engine_id: number;
+  total_questions: number;
+  total_marks: number;
+  generated_at: string;
+}
+
 interface PaperHistory {
   id: number;
-  subject_name?: string;
-  created_at?: string;
+  subject_name: string;
+  created_at: string;
 }
+
+const ENGINE_MAP: Record<number, string> = {
+  1: 'OpenAI',
+  2: 'Rule + ML Hybrid',
+};
 
 interface Analytics {
   difficulty_distribution?: { [key: string]: number };
@@ -80,8 +96,32 @@ export default function Analytics() {
 
   const loadPapers = async () => {
     try {
-      const data = await paperApi.getHistory();
-      setPapers(Array.isArray(data) ? data : []);
+      // Fetch subjects for name lookup
+      const years = await academicApi.getYears();
+      const subjectMap: Record<number, string> = {};
+      
+      for (const year of years) {
+        const yearId = year.year_id || year.id;
+        const semesters = await academicApi.getSemesters(yearId);
+        for (const sem of semesters) {
+          const semId = sem.semester_id || sem.id;
+          const subjects = await academicApi.getSubjects(semId);
+          for (const subj of subjects) {
+            const subjId = subj.subject_id || subj.id;
+            subjectMap[subjId] = subj.subject_name || subj.name || `Subject ${subjId}`;
+          }
+        }
+      }
+
+      const data: PaperHistoryApi[] = await paperApi.getHistory();
+      
+      const mapped: PaperHistory[] = (Array.isArray(data) ? data : []).map((p) => ({
+        id: p.paper_id,
+        subject_name: subjectMap[p.subject_id] || `Subject ${p.subject_id}`,
+        created_at: p.generated_at,
+      }));
+      
+      setPapers(mapped);
     } catch (error) {
       toast({
         title: 'Error',
