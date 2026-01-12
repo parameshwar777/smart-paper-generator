@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Users, GraduationCap, TrendingUp, Award, Loader2, AlertCircle } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Users, GraduationCap, TrendingUp, Award, Loader2, AlertCircle, 
+  Upload, FileSpreadsheet, X, BarChart3, ChevronRight 
+} from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -14,16 +19,41 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import api from '@/lib/api';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { studentsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface Student {
-  id: number;
+  student_id: number;
   name: string;
-  email: string;
-  papers_attempted?: number;
-  avg_score?: number;
-  status?: string;
+  year: number;
+  paper_id: number;
+  marks_obtained: number;
+  max_marks: number;
+  easy: number;
+  medium: number;
+  hard: number;
+}
+
+interface StudentAnalytics {
+  student_id: number;
+  name: string;
+  total_papers: number;
+  average_score: number;
+  difficulty_breakdown: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  performance_trend: Array<{
+    paper_id: number;
+    score: number;
+  }>;
 }
 
 interface StudentsStats {
@@ -36,6 +66,19 @@ interface StudentsStats {
   };
 }
 
+const COLORS = {
+  easy: 'hsl(var(--success))',
+  medium: 'hsl(var(--warning))',
+  hard: 'hsl(var(--destructive))',
+};
+
+const chartConfig = {
+  easy: { label: 'Easy', color: 'hsl(var(--success))' },
+  medium: { label: 'Medium', color: 'hsl(var(--warning))' },
+  hard: { label: 'Hard', color: 'hsl(var(--destructive))' },
+  score: { label: 'Score', color: 'hsl(var(--primary))' },
+};
+
 const getScoreColor = (score: number) => {
   if (score >= 90) return 'text-success';
   if (score >= 75) return 'text-primary';
@@ -47,7 +90,13 @@ export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
   const [stats, setStats] = useState<StudentsStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentAnalytics, setStudentAnalytics] = useState<StudentAnalytics | null>(null);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+  const [showAnalyticsDialog, setShowAnalyticsDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -58,39 +107,133 @@ export default function Students() {
     setIsLoading(true);
     setError(null);
     try {
-      // Try to fetch students from API
-      const response = await api.get('/students');
-      const data = response.data;
+      const data = await studentsApi.getAll();
       
       if (Array.isArray(data)) {
         setStudents(data);
-        // Calculate stats from data
-        const activeStudents = data.filter((s: Student) => s.status === 'active').length;
-        const avgScore = data.length > 0 
-          ? Math.round(data.reduce((acc: number, s: Student) => acc + (s.avg_score || 0), 0) / data.length)
-          : 0;
-        const topPerformer = data.reduce((top: Student | null, s: Student) => 
-          (!top || (s.avg_score || 0) > (top.avg_score || 0)) ? s : top, null);
-        
-        setStats({
-          total_students: data.length,
-          active_students: activeStudents,
-          avg_score: avgScore,
-          top_performer: topPerformer ? { name: topPerformer.name, score: topPerformer.avg_score || 0 } : undefined,
-        });
-      } else if (data.students) {
-        setStudents(data.students);
-        setStats(data.stats);
+        calculateStats(data);
       }
     } catch (err: any) {
-      // API endpoint might not exist yet
-      setError('Students API not available. This feature requires backend integration.');
+      setError('No students found. Upload a CSV to get started.');
       setStudents([]);
       setStats(null);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const calculateStats = (data: Student[]) => {
+    if (data.length === 0) {
+      setStats(null);
+      return;
+    }
+
+    const uniqueStudents = [...new Map(data.map(s => [s.student_id, s])).values()];
+    const avgScore = Math.round(
+      data.reduce((acc, s) => acc + (s.marks_obtained / s.max_marks) * 100, 0) / data.length
+    );
+    const topPerformer = data.reduce((top, s) => {
+      const score = (s.marks_obtained / s.max_marks) * 100;
+      const topScore = top ? (top.marks_obtained / top.max_marks) * 100 : 0;
+      return score > topScore ? s : top;
+    }, data[0]);
+
+    setStats({
+      total_students: uniqueStudents.length,
+      active_students: uniqueStudents.length,
+      avg_score: avgScore,
+      top_performer: topPerformer ? {
+        name: topPerformer.name,
+        score: Math.round((topPerformer.marks_obtained / topPerformer.max_marks) * 100),
+      } : undefined,
+    });
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a CSV file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await studentsApi.uploadCsv(file);
+      toast({
+        title: 'Upload successful',
+        description: 'Student data has been imported',
+      });
+      await loadStudents();
+    } catch (err: any) {
+      toast({
+        title: 'Upload failed',
+        description: err.response?.data?.detail || 'Failed to upload CSV',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleViewAnalytics = async (student: Student) => {
+    setSelectedStudent(student);
+    setShowAnalyticsDialog(true);
+    setIsAnalyticsLoading(true);
+    
+    try {
+      const analytics = await studentsApi.getAnalytics(student.student_id);
+      setStudentAnalytics(analytics);
+    } catch (err) {
+      // Build analytics from local data if API fails
+      const studentRecords = students.filter(s => s.student_id === student.student_id);
+      const localAnalytics: StudentAnalytics = {
+        student_id: student.student_id,
+        name: student.name,
+        total_papers: studentRecords.length,
+        average_score: Math.round(
+          studentRecords.reduce((acc, s) => acc + (s.marks_obtained / s.max_marks) * 100, 0) / studentRecords.length
+        ),
+        difficulty_breakdown: {
+          easy: studentRecords.reduce((acc, s) => acc + s.easy, 0),
+          medium: studentRecords.reduce((acc, s) => acc + s.medium, 0),
+          hard: studentRecords.reduce((acc, s) => acc + s.hard, 0),
+        },
+        performance_trend: studentRecords.map(s => ({
+          paper_id: s.paper_id,
+          score: Math.round((s.marks_obtained / s.max_marks) * 100),
+        })),
+      };
+      setStudentAnalytics(localAnalytics);
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
+  };
+
+  const difficultyPieData = studentAnalytics ? [
+    { name: 'Easy', value: studentAnalytics.difficulty_breakdown.easy, fill: COLORS.easy },
+    { name: 'Medium', value: studentAnalytics.difficulty_breakdown.medium, fill: COLORS.medium },
+    { name: 'Hard', value: studentAnalytics.difficulty_breakdown.hard, fill: COLORS.hard },
+  ] : [];
+
+  const performanceBarData = studentAnalytics?.performance_trend.map(t => ({
+    paper: `Paper ${t.paper_id}`,
+    score: t.score,
+  })) || [];
+
+  const radarData = studentAnalytics ? [
+    { subject: 'Easy', score: studentAnalytics.difficulty_breakdown.easy, fullMark: 100 },
+    { subject: 'Medium', score: studentAnalytics.difficulty_breakdown.medium, fullMark: 100 },
+    { subject: 'Hard', score: studentAnalytics.difficulty_breakdown.hard, fullMark: 100 },
+  ] : [];
 
   return (
     <DashboardLayout>
@@ -99,27 +242,71 @@ export default function Students() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-1"
+          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         >
-          <h1 className="text-3xl font-bold tracking-tight">Students</h1>
-          <p className="text-muted-foreground">
-            Student performance analytics and management
-          </p>
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight">Students</h1>
+            <p className="text-muted-foreground">
+              Student performance analytics and management
+            </p>
+          </div>
+
+          {/* CSV Upload Button */}
+          <div className="flex gap-3">
+            <input
+              type="file"
+              accept=".csv"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="gap-2"
+            >
+              {isUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Import CSV
+            </Button>
+          </div>
+        </motion.div>
+
+        {/* CSV Format Help */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="border-dashed">
+            <CardContent className="flex items-start gap-4 p-4">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <FileSpreadsheet className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-sm">CSV Format</p>
+                <code className="mt-1 block text-xs text-muted-foreground bg-muted p-2 rounded overflow-x-auto">
+                  student_id,name,year,paper_id,marks_obtained,max_marks,easy,medium,hard
+                </code>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : error ? (
+        ) : students.length === 0 ? (
           <>
-            {/* Error/Not Available Notice */}
             <Alert>
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error || 'No students found. Upload a CSV to get started.'}</AlertDescription>
             </Alert>
 
-            {/* Future ML Integration Notice */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -131,9 +318,9 @@ export default function Students() {
                     <TrendingUp className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="font-semibold">ML-Powered Analytics Coming Soon</p>
+                    <p className="font-semibold">ML-Powered Analytics</p>
                     <p className="text-sm text-muted-foreground">
-                      Future integration will include predictive performance analysis, personalized learning paths, and AI-driven insights.
+                      Upload student data to unlock performance analytics, difficulty breakdown, and trend analysis.
                     </p>
                   </div>
                 </CardContent>
@@ -185,34 +372,32 @@ export default function Students() {
                 <CardHeader>
                   <CardTitle>Student Directory</CardTitle>
                   <CardDescription>
-                    Overview of all registered students and their performance
+                    Click on a student to view detailed analytics
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {students.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <Users className="mb-4 h-12 w-12 text-muted-foreground/50" />
-                      <p className="text-muted-foreground">No students found</p>
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Student</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead className="text-center">Papers Attempted</TableHead>
-                          <TableHead className="text-center">Avg. Score</TableHead>
-                          <TableHead className="text-center">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {students.map((student, index) => (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student</TableHead>
+                        <TableHead className="text-center">Year</TableHead>
+                        <TableHead className="text-center">Paper</TableHead>
+                        <TableHead className="text-center">Score</TableHead>
+                        <TableHead className="text-center">Difficulty Breakdown</TableHead>
+                        <TableHead className="text-right">Analytics</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {students.map((student, index) => {
+                        const scorePercent = Math.round((student.marks_obtained / student.max_marks) * 100);
+                        return (
                           <motion.tr
-                            key={student.id}
+                            key={`${student.student_id}-${student.paper_id}`}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: 0.05 * index }}
-                            className="group"
+                            className="group cursor-pointer hover:bg-muted/50"
+                            onClick={() => handleViewAnalytics(student)}
                           >
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -222,35 +407,222 @@ export default function Students() {
                                 <span className="font-medium">{student.name}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {student.email}
+                            <TableCell className="text-center">
+                              <Badge variant="outline">Year {student.year}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center text-muted-foreground">
+                              #{student.paper_id}
                             </TableCell>
                             <TableCell className="text-center">
-                              {student.papers_attempted || 0}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <span className={`font-semibold ${getScoreColor(student.avg_score || 0)}`}>
-                                {student.avg_score || 0}%
+                              <span className={`font-semibold ${getScoreColor(scorePercent)}`}>
+                                {student.marks_obtained}/{student.max_marks}
                               </span>
                             </TableCell>
-                            <TableCell className="text-center">
-                              <Badge
-                                variant={student.status === 'active' ? 'default' : 'secondary'}
-                                className={student.status === 'active' ? 'bg-success/10 text-success' : ''}
-                              >
-                                {student.status || 'unknown'}
-                              </Badge>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1">
+                                <div className="flex items-center gap-1 text-xs">
+                                  <span className="h-2 w-2 rounded-full bg-success" />
+                                  <span>{student.easy}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs">
+                                  <span className="h-2 w-2 rounded-full bg-warning" />
+                                  <span>{student.medium}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs">
+                                  <span className="h-2 w-2 rounded-full bg-destructive" />
+                                  <span>{student.hard}</span>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm" className="gap-1">
+                                <BarChart3 className="h-4 w-4" />
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </motion.tr>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </motion.div>
           </>
         )}
+
+        {/* Analytics Dialog */}
+        <Dialog open={showAnalyticsDialog} onOpenChange={setShowAnalyticsDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                {selectedStudent && (
+                  <>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
+                      {selectedStudent.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p>{selectedStudent.name}</p>
+                      <p className="text-sm font-normal text-muted-foreground">
+                        Student Analytics
+                      </p>
+                    </div>
+                  </>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+
+            {isAnalyticsLoading ? (
+              <div className="flex h-64 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : studentAnalytics ? (
+              <div className="space-y-6 mt-4">
+                {/* Quick Stats */}
+                <div className="grid grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold text-primary">{studentAnalytics.total_papers}</p>
+                      <p className="text-sm text-muted-foreground">Papers Attempted</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className={`text-2xl font-bold ${getScoreColor(studentAnalytics.average_score)}`}>
+                        {studentAnalytics.average_score}%
+                      </p>
+                      <p className="text-sm text-muted-foreground">Average Score</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <p className="text-2xl font-bold">
+                        {studentAnalytics.difficulty_breakdown.easy + studentAnalytics.difficulty_breakdown.medium + studentAnalytics.difficulty_breakdown.hard}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Total Questions</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Charts */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Difficulty Pie Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Difficulty Breakdown</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={chartConfig} className="h-[200px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={difficultyPieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={50}
+                              outerRadius={80}
+                              paddingAngle={2}
+                              dataKey="value"
+                              label={({ name, value }) => `${name}: ${value}`}
+                            >
+                              {difficultyPieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                              ))}
+                            </Pie>
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Radar Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Performance Radar</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={chartConfig} className="h-[200px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart data={radarData}>
+                            <PolarGrid />
+                            <PolarAngleAxis dataKey="subject" />
+                            <PolarRadiusAxis />
+                            <Radar
+                              name="Score"
+                              dataKey="score"
+                              stroke="hsl(var(--primary))"
+                              fill="hsl(var(--primary))"
+                              fillOpacity={0.5}
+                            />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Performance Trend Bar Chart */}
+                {performanceBarData.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Performance Trend</CardTitle>
+                      <CardDescription>Score across papers</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={chartConfig} className="h-[200px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={performanceBarData}>
+                            <XAxis dataKey="paper" />
+                            <YAxis domain={[0, 100]} />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="score" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Difficulty Details */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Difficulty Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full bg-success" />
+                          <span className="font-medium">Easy Questions</span>
+                        </div>
+                        <span className="text-lg font-bold">{studentAnalytics.difficulty_breakdown.easy}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full bg-warning" />
+                          <span className="font-medium">Medium Questions</span>
+                        </div>
+                        <span className="text-lg font-bold">{studentAnalytics.difficulty_breakdown.medium}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full bg-destructive" />
+                          <span className="font-medium">Hard Questions</span>
+                        </div>
+                        <span className="text-lg font-bold">{studentAnalytics.difficulty_breakdown.hard}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="flex h-32 items-center justify-center text-muted-foreground">
+                No analytics data available
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
