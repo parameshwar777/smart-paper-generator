@@ -135,7 +135,7 @@ export const studentsApi = {
     return response.data;
   },
   getAll: async () => {
-    const response = await api.get('/students');
+    const response = await api.get('/students/');
     return response.data;
   },
   getAnalytics: async (studentId: number) => {

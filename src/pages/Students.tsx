@@ -28,16 +28,32 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, 
 import { studentsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
-interface Student {
+// API response structure
+interface StudentApiResponse {
+  result_id: number;
   student_id: number;
-  name: string;
-  year: number;
+  paper_id: number;
+  marks_obtained: number;
+  max_marks: number;
+  difficulty_breakdown: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  created_at: string;
+}
+
+// UI display structure
+interface Student {
+  result_id: number;
+  student_id: number;
   paper_id: number;
   marks_obtained: number;
   max_marks: number;
   easy: number;
   medium: number;
   hard: number;
+  created_at: string;
 }
 
 interface StudentAnalytics {
@@ -107,11 +123,23 @@ export default function Students() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await studentsApi.getAll();
+      const data: StudentApiResponse[] = await studentsApi.getAll();
       
       if (Array.isArray(data)) {
-        setStudents(data);
-        calculateStats(data);
+        // Transform API response to UI structure
+        const transformed: Student[] = data.map(s => ({
+          result_id: s.result_id,
+          student_id: s.student_id,
+          paper_id: s.paper_id,
+          marks_obtained: s.marks_obtained,
+          max_marks: s.max_marks,
+          easy: s.difficulty_breakdown?.easy || 0,
+          medium: s.difficulty_breakdown?.medium || 0,
+          hard: s.difficulty_breakdown?.hard || 0,
+          created_at: s.created_at,
+        }));
+        setStudents(transformed);
+        calculateStats(transformed);
       }
     } catch (err: any) {
       setError('No students found. Upload a CSV to get started.');
@@ -143,7 +171,7 @@ export default function Students() {
       active_students: uniqueStudents.length,
       avg_score: avgScore,
       top_performer: topPerformer ? {
-        name: topPerformer.name,
+        name: `Student ${topPerformer.student_id}`,
         score: Math.round((topPerformer.marks_obtained / topPerformer.max_marks) * 100),
       } : undefined,
     });
@@ -197,7 +225,7 @@ export default function Students() {
       const studentRecords = students.filter(s => s.student_id === student.student_id);
       const localAnalytics: StudentAnalytics = {
         student_id: student.student_id,
-        name: student.name,
+        name: `Student ${student.student_id}`,
         total_papers: studentRecords.length,
         average_score: Math.round(
           studentRecords.reduce((acc, s) => acc + (s.marks_obtained / s.max_marks) * 100, 0) / studentRecords.length
@@ -380,8 +408,8 @@ export default function Students() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Student</TableHead>
-                        <TableHead className="text-center">Year</TableHead>
                         <TableHead className="text-center">Paper</TableHead>
+                        <TableHead className="text-center">Result</TableHead>
                         <TableHead className="text-center">Score</TableHead>
                         <TableHead className="text-center">Difficulty Breakdown</TableHead>
                         <TableHead className="text-right">Analytics</TableHead>
@@ -402,16 +430,19 @@ export default function Students() {
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                  {student.name.charAt(0)}
+                                  S{student.student_id}
                                 </div>
-                                <span className="font-medium">{student.name}</span>
+                                <span className="font-medium">Student {student.student_id}</span>
                               </div>
                             </TableCell>
                             <TableCell className="text-center">
-                              <Badge variant="outline">Year {student.year}</Badge>
+                              <Badge variant="outline">Paper #{student.paper_id}</Badge>
                             </TableCell>
                             <TableCell className="text-center text-muted-foreground">
                               #{student.paper_id}
+                            </TableCell>
+                            <TableCell className="text-center text-muted-foreground">
+                              #{student.result_id}
                             </TableCell>
                             <TableCell className="text-center">
                               <span className={`font-semibold ${getScoreColor(scorePercent)}`}>
@@ -459,10 +490,10 @@ export default function Students() {
                 {selectedStudent && (
                   <>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-                      {selectedStudent.name.charAt(0)}
+                      S{selectedStudent.student_id}
                     </div>
                     <div>
-                      <p>{selectedStudent.name}</p>
+                      <p>Student {selectedStudent.student_id}</p>
                       <p className="text-sm font-normal text-muted-foreground">
                         Student Analytics
                       </p>
