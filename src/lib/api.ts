@@ -124,4 +124,24 @@ export const analyticsApi = {
   },
 };
 
+// Students API
+export const studentsApi = {
+  uploadCsv: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/students/upload-csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+  getAll: async () => {
+    const response = await api.get('/students');
+    return response.data;
+  },
+  getAnalytics: async (studentId: number) => {
+    const response = await api.get(`/students/students/analytics/${studentId}`);
+    return response.data;
+  },
+};
+
 export default api;
