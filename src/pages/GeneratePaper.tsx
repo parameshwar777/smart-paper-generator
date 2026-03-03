@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Sparkles, Download, Eye, AlertCircle, Zap, Brain, ChevronRight, CheckCircle2, FileText } from 'lucide-react';
+import { Loader2, Sparkles, Download, Eye, AlertCircle, Zap, Brain, ChevronRight, CheckCircle2, FileText, BookOpen } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 
 interface SelectOption {
   id: number;
@@ -32,7 +34,10 @@ export default function GeneratePaper() {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [aiEngine, setAiEngine] = useState<string>('openai');
   const [difficulty, setDifficulty] = useState({ easy: 30, medium: 50, hard: 20 });
-  const [totalMarks, setTotalMarks] = useState<number>(100);
+  const [totalMarks, setTotalMarks] = useState<number>(70);
+
+  // Final Paper mode: include all units
+  const [isFinalPaper, setIsFinalPaper] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -166,37 +171,68 @@ export default function GeneratePaper() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedSubject || !selectedUnit || !selectedTopic) {
-      toast({ title: 'Error', description: 'Please select subject, unit, and topic', variant: 'destructive' });
-      return;
+    if (isFinalPaper) {
+      // Final paper only needs subject selected (all units included)
+      if (!selectedSubject) {
+        toast({ title: 'Error', description: 'Please select subject', variant: 'destructive' });
+        return;
+      }
+    } else {
+      if (!selectedSubject || !selectedUnit || !selectedTopic) {
+        toast({ title: 'Error', description: 'Please select subject, unit, and topic', variant: 'destructive' });
+        return;
+      }
     }
 
     setIsGenerating(true);
     setGeneratedPaperId(null);
 
     try {
-      // Get the topic name for the unit_topic_map
-      const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
-      
-      const payload = {
-        subject_id: parseInt(selectedSubject),
-        paper_model_id: 1,
-        ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
-        difficulty_distribution: {
-          Easy: Math.round(difficulty.easy / 10),
-          Medium: Math.round(difficulty.medium / 10),
-          Hard: Math.round(difficulty.hard / 10),
-        },
-        unit_topic_map: {
-          [selectedUnit]: topicName,
-        },
-        marks_map: {
-          Easy: 5,
-          Medium: 10,
-          Hard: 15,
-        },
-        generated_by: 1,
-      };
+      let payload: any;
+
+      if (isFinalPaper) {
+        // Final paper: send all unit IDs for the subject
+        payload = {
+          subject_id: parseInt(selectedSubject),
+          paper_model_id: 1,
+          ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
+          difficulty_distribution: {
+            Easy: Math.round(difficulty.easy / 10),
+            Medium: Math.round(difficulty.medium / 10),
+            Hard: Math.round(difficulty.hard / 10),
+          },
+          unit_ids: units.map(u => u.id),
+          marks_map: {
+            Easy: 5,
+            Medium: 10,
+            Hard: 15,
+          },
+          total_marks: totalMarks,
+          generated_by: 1,
+        };
+      } else {
+        // Single unit/topic mode
+        const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
+        payload = {
+          subject_id: parseInt(selectedSubject),
+          paper_model_id: 1,
+          ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
+          difficulty_distribution: {
+            Easy: Math.round(difficulty.easy / 10),
+            Medium: Math.round(difficulty.medium / 10),
+            Hard: Math.round(difficulty.hard / 10),
+          },
+          unit_topic_map: {
+            [selectedUnit]: topicName,
+          },
+          marks_map: {
+            Easy: 5,
+            Medium: 10,
+            Hard: 15,
+          },
+          generated_by: 1,
+        };
+      }
 
       const response = await paperApi.generate(payload);
       setGenerationProgress(100);
@@ -235,6 +271,10 @@ export default function GeneratePaper() {
 
   const completionPercentage = (completionSteps.filter(s => s.complete).length / completionSteps.length) * 100;
 
+  const canGenerate = isFinalPaper
+    ? !!selectedSubject && units.length > 0
+    : !!selectedSubject && !!selectedUnit && !!selectedTopic;
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -258,6 +298,40 @@ export default function GeneratePaper() {
             transition={{ delay: 0.1 }}
             className="lg:col-span-2 space-y-6"
           >
+            {/* Paper Type Toggle */}
+            <Card className="overflow-hidden border-2 border-primary/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Paper Mode</p>
+                      <p className="text-sm text-muted-foreground">
+                        {isFinalPaper 
+                          ? 'Final Paper — All units included (semester exam)'
+                          : 'Unit Paper — Single unit/topic questions'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-medium ${!isFinalPaper ? 'text-primary' : 'text-muted-foreground'}`}>Unit</span>
+                    <Switch checked={isFinalPaper} onCheckedChange={setIsFinalPaper} />
+                    <span className={`text-sm font-medium ${isFinalPaper ? 'text-primary' : 'text-muted-foreground'}`}>Final</span>
+                  </div>
+                </div>
+                {isFinalPaper && units.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {units.map(u => (
+                      <Badge key={u.id} variant="secondary" className="text-xs">{u.name}</Badge>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Academic Selection Card */}
             <Card className="overflow-hidden">
               <CardHeader className="border-b border-border bg-muted/30">
@@ -278,7 +352,7 @@ export default function GeneratePaper() {
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
-                {/* Two Column Grid - Year & Semester */}
+                {/* Year & Semester */}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Select Year</Label>
@@ -288,9 +362,7 @@ export default function GeneratePaper() {
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border">
                         {years.map((year) => (
-                          <SelectItem key={year.id} value={year.id.toString()}>
-                            {year.name}
-                          </SelectItem>
+                          <SelectItem key={year.id} value={year.id.toString()}>{year.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -304,17 +376,15 @@ export default function GeneratePaper() {
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border">
                         {semesters.map((sem) => (
-                          <SelectItem key={sem.id} value={sem.id.toString()}>
-                            {sem.name}
-                          </SelectItem>
+                          <SelectItem key={sem.id} value={sem.id.toString()}>{sem.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                {/* Two Column Grid - Subject & Unit */}
-                <div className="grid gap-4 md:grid-cols-2">
+                {/* Subject & Unit */}
+                <div className={`grid gap-4 ${isFinalPaper ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Select Subject</Label>
                     <Select value={selectedSubject} onValueChange={handleSubjectChange} disabled={!selectedSemester}>
@@ -323,47 +393,56 @@ export default function GeneratePaper() {
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border">
                         {subjects.map((sub) => (
-                          <SelectItem key={sub.id} value={sub.id.toString()}>
-                            {sub.name}
-                          </SelectItem>
+                          <SelectItem key={sub.id} value={sub.id.toString()}>{sub.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
+                  {!isFinalPaper && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Select Unit</Label>
+                      <Select value={selectedUnit} onValueChange={handleUnitChange} disabled={!selectedSubject}>
+                        <SelectTrigger className="h-12 bg-background border-border hover:border-primary/50 transition-colors disabled:opacity-50">
+                          <SelectValue placeholder="Select Unit" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border-border">
+                          {units.map((unit) => (
+                            <SelectItem key={unit.id} value={unit.id.toString()}>{unit.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Topic - only in unit mode */}
+                {!isFinalPaper && (
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Select Unit <span className="text-muted-foreground">(Optional)</span></Label>
-                    <Select value={selectedUnit} onValueChange={handleUnitChange} disabled={!selectedSubject}>
+                    <Label className="text-sm font-medium">Select Topic</Label>
+                    <Select value={selectedTopic} onValueChange={setSelectedTopic} disabled={!selectedUnit}>
                       <SelectTrigger className="h-12 bg-background border-border hover:border-primary/50 transition-colors disabled:opacity-50">
-                        <SelectValue placeholder="Select Unit" />
+                        <SelectValue placeholder="Select Topic" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover border-border">
-                        {units.map((unit) => (
-                          <SelectItem key={unit.id} value={unit.id.toString()}>
-                            {unit.name}
-                          </SelectItem>
+                        {topics.map((topic) => (
+                          <SelectItem key={topic.id} value={topic.id.toString()}>{topic.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
+                )}
 
-                {/* Full Width - Topic */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Select Topic <span className="text-muted-foreground">(Optional)</span></Label>
-                  <Select value={selectedTopic} onValueChange={setSelectedTopic} disabled={!selectedUnit}>
-                    <SelectTrigger className="h-12 bg-background border-border hover:border-primary/50 transition-colors disabled:opacity-50">
-                      <SelectValue placeholder="Select Topic" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover border-border">
-                      {topics.map((topic) => (
-                        <SelectItem key={topic.id} value={topic.id.toString()}>
-                          {topic.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Final paper info */}
+                {isFinalPaper && selectedSubject && (
+                  <Alert className="bg-primary/5 border-primary/20">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    <AlertDescription className="text-sm">
+                      <strong>Final Paper Mode:</strong> All {units.length} units will be included. 
+                      Each unit will have questions with sub-parts, matching the standard university exam format.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
@@ -450,7 +529,7 @@ export default function GeneratePaper() {
                       onValueChange={([value]) => setTotalMarks(value)}
                       min={25}
                       max={200}
-                      step={25}
+                      step={5}
                       className="flex-1"
                     />
                     <div className="flex h-12 w-20 items-center justify-center rounded-lg border border-border bg-muted/30 font-semibold">
@@ -552,19 +631,19 @@ export default function GeneratePaper() {
             <motion.div whileHover={{ scale: 1.005 }} whileTap={{ scale: 0.995 }}>
               <Button
                 onClick={handleGenerate}
-                disabled={isGenerating || !selectedSubject || !selectedUnit || !selectedTopic}
+                disabled={isGenerating || !canGenerate}
                 className="w-full h-14 text-lg shadow-glow"
                 size="lg"
               >
                 {isGenerating ? (
                   <div className="flex items-center gap-3">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Generating Paper...</span>
+                    <span>Generating {isFinalPaper ? 'Final' : ''} Paper...</span>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5" />
-                    <span>Generate Question Paper</span>
+                    <span>Generate {isFinalPaper ? 'Final Exam' : 'Question'} Paper</span>
                     <ChevronRight className="h-5 w-5" />
                   </div>
                 )}
@@ -619,6 +698,12 @@ export default function GeneratePaper() {
 
                       {/* Summary */}
                       <div className="space-y-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Mode</span>
+                          <Badge variant={isFinalPaper ? 'default' : 'secondary'}>
+                            {isFinalPaper ? 'Final Exam' : 'Unit Paper'}
+                          </Badge>
+                        </div>
                         {selectedSubject && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Subject</span>
@@ -681,11 +766,11 @@ export default function GeneratePaper() {
                           </li>
                           <li className="flex items-start gap-2">
                             <ChevronRight className="h-4 w-4 mt-0.5 text-primary" />
-                            Unit and Topic are optional for broader coverage
+                            Toggle "Final" for full semester exam paper
                           </li>
                           <li className="flex items-start gap-2">
                             <ChevronRight className="h-4 w-4 mt-0.5 text-primary" />
-                            Adjust difficulty distribution as needed
+                            Unit mode for topic-specific questions
                           </li>
                         </ul>
                       </div>
