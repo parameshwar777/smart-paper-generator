@@ -272,7 +272,7 @@ export default function GeneratePaper() {
   const completionPercentage = (completionSteps.filter(s => s.complete).length / completionSteps.length) * 100;
 
   const canGenerate = isFinalPaper
-    ? !!selectedSubject && units.length > 0
+    ? !!selectedSubject
     : !!selectedSubject && !!selectedUnit && !!selectedTopic;
 
   return (
