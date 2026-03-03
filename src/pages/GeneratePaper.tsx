@@ -172,7 +172,6 @@ export default function GeneratePaper() {
 
   const handleGenerate = async () => {
     if (isFinalPaper) {
-      // Final paper only needs subject selected (all units included)
       if (!selectedSubject) {
         toast({ title: 'Error', description: 'Please select subject', variant: 'destructive' });
         return;
@@ -191,61 +190,74 @@ export default function GeneratePaper() {
       let payload: any;
 
       if (isFinalPaper) {
-        // Final paper: send all unit IDs for the subject
+        // Final paper mode: all units, no difficulty_distribution needed
         payload = {
           subject_id: parseInt(selectedSubject),
           paper_model_id: 1,
           ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
-          difficulty_distribution: {
-            Easy: Math.round(difficulty.easy / 10),
-            Medium: Math.round(difficulty.medium / 10),
-            Hard: Math.round(difficulty.hard / 10),
-          },
+          paper_mode: 'final',
           unit_ids: units.map(u => u.id),
-          marks_map: {
-            Easy: 5,
-            Medium: 10,
-            Hard: 15,
-          },
-          total_marks: totalMarks,
           generated_by: 1,
         };
       } else {
-        // Single unit/topic mode
+        // Unit mode: single unit + topic with difficulty
         const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
         payload = {
           subject_id: parseInt(selectedSubject),
           paper_model_id: 1,
           ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
+          paper_mode: 'unit',
+          selected_unit_id: parseInt(selectedUnit),
+          selected_topic: topicName,
           difficulty_distribution: {
             Easy: Math.round(difficulty.easy / 10),
             Medium: Math.round(difficulty.medium / 10),
             Hard: Math.round(difficulty.hard / 10),
           },
-          unit_topic_map: {
-            [selectedUnit]: topicName,
-          },
           marks_map: {
-            Easy: 5,
-            Medium: 10,
-            Hard: 15,
+            Easy: 2,
+            Medium: 5,
+            Hard: 10,
           },
           generated_by: 1,
         };
       }
 
       const response = await paperApi.generate(payload);
+      const newPaperId = response.paper_id;
+
+      if (!newPaperId) {
+        throw new Error('Backend did not return a paper_id');
+      }
+
       setGenerationProgress(100);
-      setGeneratedPaperId(response.paper_id || response.id);
+      setGeneratedPaperId(newPaperId);
       toast({
         title: 'Success!',
-        description: 'Question paper generated successfully',
+        description: `Paper #${newPaperId} generated successfully`,
       });
+
+      // Auto-navigate to paper preview
+      navigate(`/paper/${newPaperId}`);
     } catch (error: any) {
       console.error('Generation error:', error);
+      const status = error.response?.status;
+      let description = 'Failed to generate paper';
+
+      if (status === 422) {
+        const detail = error.response?.data?.detail;
+        description = Array.isArray(detail)
+          ? detail.map((d: any) => d.msg || d.message).join('; ')
+          : (typeof detail === 'string' ? detail : 'Validation error — check your selections');
+      } else if (status === 500) {
+        description = error.response?.data?.detail || 'Internal server error — please try again';
+      } else if (error.message) {
+        description = error.message;
+      }
+
       toast({
-        title: 'Generation Failed',
-        description: error.response?.data?.detail || 'Failed to generate paper',
+        title: `Generation Failed${status ? ` (${status})` : ''}`,
+        description,
         variant: 'destructive',
       });
     } finally {
