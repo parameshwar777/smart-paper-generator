@@ -148,6 +148,7 @@ export default function PaperPreview() {
   };
 
   const unitQuestions = getUnitQuestions();
+  const isFinalPaper = unitQuestions.size > 1;
   const allQuestions = Array.from(unitQuestions.values()).flat();
   const totalMarks = paper?.total_marks || allQuestions.reduce((sum, q) => sum + (q.marks || 0), 0);
   const totalQuestions = paper?.total_questions || allQuestions.length;
@@ -258,73 +259,114 @@ export default function PaperPreview() {
             </div>
 
             {/* Questions Body */}
-            <div className="p-6 sm:p-8 space-y-8">
-              {Array.from(unitQuestions.entries()).map(([unitName, questions], unitIndex) => (
-                <div key={unitIndex}>
-                  {/* Unit Header */}
-                  {unitQuestions.size > 1 && (
-                    <div className="flex items-center gap-3 mb-5">
-                      <Separator className="flex-1" />
-                      <span className="text-sm font-bold uppercase tracking-widest text-primary whitespace-nowrap">
-                        {unitName.toLowerCase().startsWith('unit') ? unitName : `Unit - ${unitName}`}
-                      </span>
-                      <Separator className="flex-1" />
-                    </div>
-                  )}
+            <div className="p-6 sm:p-8 space-y-4">
+              {isFinalPaper ? (
+                // ===== FINAL PAPER FORMAT (university exam style) =====
+                (() => {
+                  let globalQ = 0;
+                  return Array.from(unitQuestions.entries()).map(([unitName, questions], unitIndex) => {
+                    // Pair questions: every 2 questions get an "Or" between them
+                    const pairs: Question[][] = [];
+                    for (let i = 0; i < questions.length; i += 2) {
+                      pairs.push(questions.slice(i, i + 2));
+                    }
 
-                  {/* Questions in this unit */}
-                  <div className="space-y-5">
-                    {questions.map((question, qIndex) => {
-                      const qNumber = unitQuestions.size > 1
-                        ? qIndex + 1
-                        : (question.question_number || qIndex + 1);
+                    return (
+                      <div key={unitIndex}>
+                        {/* Unit Header */}
+                        <div className="text-center font-bold text-sm py-2 text-foreground">
+                          {unitName.toLowerCase().startsWith('unit') 
+                            ? unitName.replace(/unit\s*/i, 'Unit - ').toUpperCase().replace('UNIT', 'Unit')
+                            : `Unit - ${unitIndex + 1}`}
+                        </div>
 
-                      return (
-                        <div key={qIndex} className="group">
-                          <div className="flex gap-3">
-                            {/* Question number */}
-                            <span className="font-bold text-foreground min-w-[2rem] shrink-0">
-                              {qNumber}.
-                            </span>
+                        {pairs.map((pair, pairIndex) => (
+                          <div key={pairIndex}>
+                            {pair.map((question, qInPair) => {
+                              globalQ++;
+                              const qNum = globalQ;
+                              const hasSubParts = question.sub_part || pair.length === 1;
 
-                            <div className="flex-1 space-y-2">
-                              {/* Question text with marks */}
-                              <div className="flex gap-2">
-                                <div className="flex-1">
-                                  {question.sub_part && (
-                                    <span className="font-semibold mr-1">{question.sub_part})</span>
-                                  )}
-                                  <span className="text-foreground leading-relaxed">
-                                    {question.text}
-                                  </span>
+                              return (
+                                <div key={qInPair} className="mb-2">
+                                  {/* If question has sub_parts or multiple marks entries, render with sub-parts */}
+                                  <div className="flex gap-2 items-start py-1">
+                                    <span className="font-medium text-foreground min-w-[2rem] shrink-0">
+                                      {qNum}
+                                    </span>
+                                    {question.sub_part && (
+                                      <span className="font-medium text-foreground min-w-[1.5rem] shrink-0">
+                                        {question.sub_part})
+                                      </span>
+                                    )}
+                                    <span className="flex-1 text-foreground leading-relaxed">
+                                      {question.text}
+                                    </span>
+                                    <span className="shrink-0 font-medium text-foreground whitespace-nowrap">
+                                      ({question.marks}M)
+                                    </span>
+                                  </div>
                                 </div>
-                                <span className="shrink-0 font-semibold text-primary whitespace-nowrap">
-                                  ({question.marks}M)
+                              );
+                            })}
+
+                            {/* "Or" separator between pairs (not after the last pair in a unit) */}
+                            {pairIndex < pairs.length - 1 && (
+                              <div className="text-center font-bold text-sm text-foreground py-1">
+                                Or
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  });
+                })()
+              ) : (
+                // ===== INDIVIDUAL PAPER FORMAT (single unit, no unit headers) =====
+                <div className="space-y-5">
+                  {allQuestions.map((question, qIndex) => {
+                    const qNumber = question.question_number || qIndex + 1;
+                    return (
+                      <div key={qIndex} className="group">
+                        <div className="flex gap-3">
+                          <span className="font-bold text-foreground min-w-[2rem] shrink-0">
+                            {qNumber}.
+                          </span>
+                          <div className="flex-1 space-y-2">
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                {question.sub_part && (
+                                  <span className="font-semibold mr-1">{question.sub_part})</span>
+                                )}
+                                <span className="text-foreground leading-relaxed">
+                                  {question.text}
                                 </span>
                               </div>
-
-                              {/* Meta badges - subtle */}
-                              <div className="flex flex-wrap gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity print:opacity-100">
-                                <Badge variant="outline" className="text-[10px] h-5 capitalize">
-                                  {question.difficulty}
+                              <span className="shrink-0 font-semibold text-primary whitespace-nowrap">
+                                ({question.marks}M)
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity print:opacity-100">
+                              <Badge variant="outline" className="text-[10px] h-5 capitalize">
+                                {question.difficulty}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] h-5 capitalize">
+                                {question.bloom || question.bloom_level || ''}
+                              </Badge>
+                              {question.topic && (
+                                <Badge variant="secondary" className="text-[10px] h-5">
+                                  {question.topic}
                                 </Badge>
-                                <Badge variant="outline" className="text-[10px] h-5 capitalize">
-                                  {question.bloom || question.bloom_level || ''}
-                                </Badge>
-                                {question.topic && (
-                                  <Badge variant="secondary" className="text-[10px] h-5">
-                                    {question.topic}
-                                  </Badge>
-                                )}
-                              </div>
+                              )}
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
 
               {allQuestions.length === 0 && (
                 <div className="py-12 text-center">
