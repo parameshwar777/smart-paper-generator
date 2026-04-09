@@ -78,6 +78,15 @@ export default function GeneratePaper() {
     }));
   };
 
+  const loadDepartments = async () => {
+    try {
+      const data = await academicApi.getDepartments();
+      setDepartments(normalizeOptions(data, 'department_id', 'department_name'));
+    } catch (error) {
+      console.warn('Departments endpoint not available:', error);
+    }
+  };
+
   const loadYears = async () => {
     try {
       setIsLoading(true);
