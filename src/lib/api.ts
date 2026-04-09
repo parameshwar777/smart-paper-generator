@@ -63,6 +63,10 @@ export const authApi = {
 
 // Academic API
 export const academicApi = {
+  getDepartments: async () => {
+    const response = await api.get('/academic/departments');
+    return response.data;
+  },
   getYears: async () => {
     const response = await api.get('/academic/years');
     return response.data;
@@ -71,8 +75,9 @@ export const academicApi = {
     const response = await api.get(`/academic/semesters/${yearId}`);
     return response.data;
   },
-  getSubjects: async (semesterId: number) => {
-    const response = await api.get(`/academic/subjects/${semesterId}`);
+  getSubjects: async (semesterId: number, departmentId?: number) => {
+    const params = departmentId ? { department_id: departmentId } : {};
+    const response = await api.get(`/academic/subjects/${semesterId}`, { params });
     return response.data;
   },
   getUnits: async (subjectId: number) => {

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { paperApi, academicApi } from '@/lib/api';
+import { Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -35,6 +36,7 @@ interface PaperHistory {
   id: number;
   subject_id: number;
   subject_name: string;
+  department_name: string;
   created_at: string;
   total_marks: number;
   ai_engine: string;
@@ -58,6 +60,8 @@ export default function PaperHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [engineFilter, setEngineFilter] = useState<string>('all');
+  const [deptFilter, setDeptFilter] = useState<string>('all');
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [subjectsMap, setSubjectsMap] = useState<Record<number, string>>({});
   const { toast } = useToast();
@@ -69,15 +73,24 @@ export default function PaperHistoryPage() {
 
   useEffect(() => {
     filterPapers();
-  }, [papers, searchQuery, engineFilter]);
+  }, [papers, searchQuery, engineFilter, deptFilter]);
 
   const loadData = async () => {
     try {
+      // Load departments
+      try {
+        const depts = await academicApi.getDepartments();
+        setDepartments((Array.isArray(depts) ? depts : []).map((d: any) => ({
+          id: d.department_id,
+          name: d.department_name || d.name || `Dept ${d.department_id}`,
+        })));
+      } catch { /* departments endpoint may not exist yet */ }
+
       // First fetch all subjects to build a lookup map
       const years = await academicApi.getYears();
       const subjectMap: Record<number, string> = {};
+      const subjectDeptMap: Record<number, string> = {};
       
-      // Fetch subjects for all years/semesters
       for (const year of years) {
         const yearId = year.year_id || year.id;
         const semesters = await academicApi.getSemesters(yearId);
@@ -87,6 +100,7 @@ export default function PaperHistoryPage() {
           for (const subj of subjects) {
             const subjId = subj.subject_id || subj.id;
             subjectMap[subjId] = subj.subject_name || subj.name || `Subject ${subjId}`;
+            subjectDeptMap[subjId] = subj.department_name || subj.department || '';
           }
         }
       }
@@ -95,11 +109,11 @@ export default function PaperHistoryPage() {
       // Now fetch paper history
       const data: PaperHistoryApi[] = await paperApi.getHistory();
       
-      // Map to UI structure
       const mapped: PaperHistory[] = (Array.isArray(data) ? data : []).map((p) => ({
         id: p.paper_id,
         subject_id: p.subject_id,
         subject_name: subjectMap[p.subject_id] || `Subject ${p.subject_id}`,
+        department_name: subjectDeptMap[p.subject_id] || '',
         created_at: p.generated_at,
         total_marks: p.total_marks,
         ai_engine: ENGINE_MAP[p.ai_engine_id] || `Engine ${p.ai_engine_id}`,
@@ -127,12 +141,17 @@ export default function PaperHistoryPage() {
       filtered = filtered.filter(
         (p) =>
           p.id.toString().includes(query) ||
-          (p.subject_name?.toLowerCase().includes(query))
+          (p.subject_name?.toLowerCase().includes(query)) ||
+          (p.department_name?.toLowerCase().includes(query))
       );
     }
 
     if (engineFilter !== 'all') {
       filtered = filtered.filter((p) => p.ai_engine?.toLowerCase() === engineFilter);
+    }
+
+    if (deptFilter !== 'all') {
+      filtered = filtered.filter((p) => p.department_name?.toLowerCase() === deptFilter.toLowerCase());
     }
 
     setFilteredPapers(filtered);
@@ -247,12 +266,26 @@ export default function PaperHistoryPage() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by paper ID or subject..."
+                    placeholder="Search by paper ID, subject, or department..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 h-11"
                   />
                 </div>
+                {departments.length > 0 && (
+                  <Select value={deptFilter} onValueChange={setDeptFilter}>
+                    <SelectTrigger className="w-full md:w-48 h-11">
+                      <Building2 className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Filter by dept" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border">
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map(d => (
+                        <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Select value={engineFilter} onValueChange={setEngineFilter}>
                   <SelectTrigger className="w-full md:w-48 h-11">
                     <Filter className="h-4 w-4 mr-2" />
@@ -342,9 +375,16 @@ export default function PaperHistoryPage() {
                               </CardDescription>
                             </div>
                           </div>
-                          <Badge variant={getEngineVariant(paper.ai_engine)}>
-                            {paper.ai_engine || 'OpenAI'}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            {paper.department_name && (
+                              <Badge variant="secondary" className="text-xs">
+                                {paper.department_name}
+                              </Badge>
+                            )}
+                            <Badge variant={getEngineVariant(paper.ai_engine)}>
+                              {paper.ai_engine || 'OpenAI'}
+                            </Badge>
+                          </div>
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
@@ -407,6 +447,7 @@ export default function PaperHistoryPage() {
                   <TableRow>
                     <TableHead>Paper ID</TableHead>
                     <TableHead>Subject</TableHead>
+                    <TableHead>Department</TableHead>
                     <TableHead>AI Engine</TableHead>
                     <TableHead>Total Marks</TableHead>
                     <TableHead>Created</TableHead>
@@ -418,6 +459,11 @@ export default function PaperHistoryPage() {
                     <TableRow key={paper.id}>
                       <TableCell className="font-medium">#{paper.id}</TableCell>
                       <TableCell>{paper.subject_name || 'Question Paper'}</TableCell>
+                      <TableCell>
+                        {paper.department_name ? (
+                          <Badge variant="secondary" className="text-xs">{paper.department_name}</Badge>
+                        ) : '—'}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={getEngineVariant(paper.ai_engine)}>
                           {paper.ai_engine || 'OpenAI'}

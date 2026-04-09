@@ -21,12 +21,14 @@ interface SelectOption {
 }
 
 export default function GeneratePaper() {
+  const [departments, setDepartments] = useState<SelectOption[]>([]);
   const [years, setYears] = useState<SelectOption[]>([]);
   const [semesters, setSemesters] = useState<SelectOption[]>([]);
   const [subjects, setSubjects] = useState<SelectOption[]>([]);
   const [units, setUnits] = useState<SelectOption[]>([]);
   const [topics, setTopics] = useState<SelectOption[]>([]);
 
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
@@ -48,6 +50,7 @@ export default function GeneratePaper() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    loadDepartments();
     loadYears();
   }, []);
 
@@ -75,6 +78,15 @@ export default function GeneratePaper() {
     }));
   };
 
+  const loadDepartments = async () => {
+    try {
+      const data = await academicApi.getDepartments();
+      setDepartments(normalizeOptions(data, 'department_id', 'department_name'));
+    } catch (error) {
+      console.warn('Departments endpoint not available:', error);
+    }
+  };
+
   const loadYears = async () => {
     try {
       setIsLoading(true);
@@ -85,6 +97,20 @@ export default function GeneratePaper() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDepartmentChange = (deptId: string) => {
+    setSelectedDepartment(deptId);
+    // If semester is already selected, reload subjects for the new department
+    if (selectedSemester) {
+      loadSubjectsForSemester(parseInt(selectedSemester), parseInt(deptId));
+    }
+    setSelectedSubject('');
+    setSelectedUnit('');
+    setSelectedTopic('');
+    setSubjects([]);
+    setUnits([]);
+    setTopics([]);
   };
 
   const handleYearChange = async (yearId: string) => {
@@ -106,6 +132,15 @@ export default function GeneratePaper() {
     }
   };
 
+  const loadSubjectsForSemester = async (semesterId: number, deptId?: number) => {
+    try {
+      const data = await academicApi.getSubjects(semesterId, deptId || (selectedDepartment ? parseInt(selectedDepartment) : undefined));
+      setSubjects(normalizeOptions(data, 'subject_id', 'subject_name'));
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to load subjects', variant: 'destructive' });
+    }
+  };
+
   const handleSemesterChange = async (semesterId: string) => {
     setSelectedSemester(semesterId);
     setSelectedSubject('');
@@ -115,12 +150,7 @@ export default function GeneratePaper() {
     setUnits([]);
     setTopics([]);
 
-    try {
-      const data = await academicApi.getSubjects(parseInt(semesterId));
-      setSubjects(normalizeOptions(data, 'subject_id', 'subject_name'));
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to load subjects', variant: 'destructive' });
-    }
+    await loadSubjectsForSemester(parseInt(semesterId));
   };
 
   const handleSubjectChange = async (subjectId: string) => {
@@ -276,6 +306,7 @@ export default function GeneratePaper() {
   };
 
   const completionSteps = [
+    { label: 'Department', complete: !!selectedDepartment },
     { label: 'Year', complete: !!selectedYear },
     { label: 'Semester', complete: !!selectedSemester },
     { label: 'Subject', complete: !!selectedSubject },
@@ -354,7 +385,7 @@ export default function GeneratePaper() {
                     </div>
                     <div>
                       <CardTitle>Academic Selection</CardTitle>
-                      <CardDescription>Choose year, semester, subject, and more</CardDescription>
+                      <CardDescription>Choose department, year, semester, subject, and more</CardDescription>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
@@ -364,6 +395,23 @@ export default function GeneratePaper() {
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
+                {/* Department */}
+                {departments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Select Department / Branch</Label>
+                    <Select value={selectedDepartment} onValueChange={handleDepartmentChange}>
+                      <SelectTrigger className="h-12 bg-background border-border hover:border-primary/50 transition-colors">
+                        <SelectValue placeholder="Select Department" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border-border">
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>{dept.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {/* Year & Semester */}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
