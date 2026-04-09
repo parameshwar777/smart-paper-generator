@@ -245,6 +245,20 @@ export default function GeneratePaper() {
         };
       } else {
         const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
+        const easyMarks = 2;
+        const mediumMarks = 5;
+        const hardMarks = 10;
+
+        // Calculate how many marks each difficulty level should contribute
+        const easyTotal = Math.round(totalMarks * difficulty.easy / 100);
+        const hardTotal = Math.round(totalMarks * difficulty.hard / 100);
+        const mediumTotal = totalMarks - easyTotal - hardTotal;
+
+        // Convert to question counts
+        const easyCount = Math.round(easyTotal / easyMarks);
+        const mediumCount = Math.round(mediumTotal / mediumMarks);
+        const hardCount = Math.round(hardTotal / hardMarks);
+
         payload = {
           subject_id: parseInt(selectedSubject),
           paper_model_id: 1,
@@ -254,14 +268,14 @@ export default function GeneratePaper() {
           selected_topic: topicName,
           total_marks: totalMarks,
           difficulty_distribution: {
-            Easy: Math.round(difficulty.easy / 10),
-            Medium: Math.round(difficulty.medium / 10),
-            Hard: Math.round(difficulty.hard / 10),
+            Easy: easyCount,
+            Medium: mediumCount,
+            Hard: hardCount,
           },
           marks_map: {
-            Easy: 2,
-            Medium: 5,
-            Hard: 10,
+            Easy: easyMarks,
+            Medium: mediumMarks,
+            Hard: hardMarks,
           },
           generated_by: user?.user_id || 1,
         };
