@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { paperApi, academicApi } from '@/lib/api';
+import { paperApi, academicApi, DEPARTMENTS, getDepartmentByCode } from '@/lib/api';
 import { Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -77,14 +77,8 @@ export default function PaperHistoryPage() {
 
   const loadData = async () => {
     try {
-      // Load departments
-      try {
-        const depts = await academicApi.getDepartments();
-        setDepartments((Array.isArray(depts) ? depts : []).map((d: any) => ({
-          id: d.department_id,
-          name: d.department_name || d.name || `Dept ${d.department_id}`,
-        })));
-      } catch { /* departments endpoint may not exist yet */ }
+      // Use hardcoded departments
+      setDepartments(DEPARTMENTS.map(d => ({ id: d.id, name: d.name })));
 
       // First fetch all subjects to build a lookup map
       const years = await academicApi.getYears();
