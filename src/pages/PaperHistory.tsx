@@ -266,12 +266,26 @@ export default function PaperHistoryPage() {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by paper ID or subject..."
+                    placeholder="Search by paper ID, subject, or department..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 h-11"
                   />
                 </div>
+                {departments.length > 0 && (
+                  <Select value={deptFilter} onValueChange={setDeptFilter}>
+                    <SelectTrigger className="w-full md:w-48 h-11">
+                      <Building2 className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Filter by dept" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border">
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map(d => (
+                        <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Select value={engineFilter} onValueChange={setEngineFilter}>
                   <SelectTrigger className="w-full md:w-48 h-11">
                     <Filter className="h-4 w-4 mr-2" />
