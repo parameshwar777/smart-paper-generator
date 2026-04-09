@@ -90,9 +90,13 @@ export default function PaperPreview() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (paperId) {
-      window.open(paperApi.downloadPdf(parseInt(paperId)), '_blank');
+      try {
+        await paperApi.downloadPdf(parseInt(paperId));
+      } catch {
+        toast({ title: 'Error', description: 'Failed to download PDF', variant: 'destructive' });
+      }
     }
   };
 

@@ -309,9 +309,13 @@ export default function GeneratePaper() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (generatedPaperId) {
-      window.open(paperApi.downloadPdf(generatedPaperId), '_blank');
+      try {
+        await paperApi.downloadPdf(generatedPaperId);
+      } catch {
+        toast({ title: 'Error', description: 'Failed to download PDF', variant: 'destructive' });
+      }
     }
   };
 

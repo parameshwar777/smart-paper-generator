@@ -129,9 +129,22 @@ export const paperApi = {
     const response = await api.get(`/paper/${paperId}`);
     return response.data;
   },
-  downloadPdf: (paperId: number) => {
-    const base = API_BASE_URL.replace(/\/$/, '');
-    return `${base}/paper/download/${paperId}`;
+  downloadPdf: async (paperId: number) => {
+    const response = await api.get(`/paper/download/${paperId}`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    const disposition = response.headers['content-disposition'];
+    const filename = disposition
+      ? disposition.split('filename=')[1]?.replace(/"/g, '') || `paper_${paperId}.pdf`
+      : `paper_${paperId}.pdf`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 };
 
