@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, GraduationCap, TrendingUp, Award, Loader2, AlertCircle, 
-  Upload, FileSpreadsheet, X, BarChart3, ChevronRight 
+  Upload, FileSpreadsheet, X, BarChart3, ChevronRight, Search, Trash2, Download
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Table,
@@ -25,28 +26,33 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
-import { studentsApi } from '@/lib/api';
+import { studentsApi, academicApi, DEPARTMENTS } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
-// API response structure
 interface StudentApiResponse {
   result_id: number;
   student_id: number;
+  name?: string;
+  year?: number;
   paper_id: number;
   marks_obtained: number;
   max_marks: number;
-  difficulty_breakdown: {
+  difficulty_breakdown?: {
     easy: number;
     medium: number;
     hard: number;
   };
+  easy?: number;
+  medium?: number;
+  hard?: number;
   created_at: string;
 }
 
-// UI display structure
 interface Student {
   result_id: number;
   student_id: number;
+  name: string;
+  year: number;
   paper_id: number;
   marks_obtained: number;
   max_marks: number;
@@ -112,6 +118,7 @@ export default function Students() {
   const [studentAnalytics, setStudentAnalytics] = useState<StudentAnalytics | null>(null);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   const [showAnalyticsDialog, setShowAnalyticsDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -124,18 +131,20 @@ export default function Students() {
     setError(null);
     try {
       const data: StudentApiResponse[] = await studentsApi.getAll();
+      console.log('Students API response:', JSON.stringify(data?.slice(0, 2), null, 2));
       
       if (Array.isArray(data)) {
-        // Transform API response to UI structure
         const transformed: Student[] = data.map(s => ({
           result_id: s.result_id,
           student_id: s.student_id,
+          name: s.name || '',
+          year: s.year || 0,
           paper_id: s.paper_id,
           marks_obtained: s.marks_obtained,
           max_marks: s.max_marks,
-          easy: s.difficulty_breakdown?.easy || 0,
-          medium: s.difficulty_breakdown?.medium || 0,
-          hard: s.difficulty_breakdown?.hard || 0,
+          easy: s.difficulty_breakdown?.easy ?? s.easy ?? 0,
+          medium: s.difficulty_breakdown?.medium ?? s.medium ?? 0,
+          hard: s.difficulty_breakdown?.hard ?? s.hard ?? 0,
           created_at: s.created_at,
         }));
         setStudents(transformed);
@@ -171,7 +180,7 @@ export default function Students() {
       active_students: uniqueStudents.length,
       avg_score: avgScore,
       top_performer: topPerformer ? {
-        name: `Student ${topPerformer.student_id}`,
+        name: topPerformer.name || `Student ${topPerformer.student_id}`,
         score: Math.round((topPerformer.marks_obtained / topPerformer.max_marks) * 100),
       } : undefined,
     });
@@ -212,6 +221,74 @@ export default function Students() {
     }
   };
 
+  const handleDeleteStudent = async (student: Student, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete record for ${student.name || 'Student ' + student.student_id} (Paper #${student.paper_id})?`)) return;
+    
+    try {
+      await studentsApi.delete(student.result_id);
+      toast({ title: 'Deleted', description: 'Student record removed.' });
+      await loadStudents();
+    } catch (err: any) {
+      toast({
+        title: 'Delete failed',
+        description: err.response?.data?.detail || 'Could not delete student record',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadSampleCsv = async () => {
+    try {
+      // Build sample CSV with real years/subjects from API
+      const years = await academicApi.getYears();
+      const rows: string[] = ['student_id,name,year,paper_id,marks_obtained,max_marks,easy,medium,hard'];
+      
+      let sampleId = 1;
+      for (const year of years.slice(0, 2)) {
+        const yearId = year.year_id || year.id;
+        const yearNum = year.year || year.year_name || yearId;
+        const semesters = await academicApi.getSemesters(yearId);
+        for (const sem of semesters.slice(0, 1)) {
+          const semId = sem.semester_id || sem.id;
+          const subjects = await academicApi.getSubjects(semId);
+          for (const subj of subjects.slice(0, 2)) {
+            rows.push(`${sampleId},Student Name,${yearNum},PAPER_ID,75,100,30,25,20`);
+            sampleId++;
+          }
+        }
+      }
+
+      // Fallback if API returned nothing
+      if (rows.length === 1) {
+        rows.push('1,Alice,2,19,78,100,26,30,22');
+        rows.push('2,Bob,2,19,64,100,22,25,17');
+        rows.push('3,Charlie,3,20,85,100,30,30,25');
+      }
+
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'students_sample.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback sample
+      const csv = `student_id,name,year,paper_id,marks_obtained,max_marks,easy,medium,hard
+1,Alice,2,19,78,100,26,30,22
+2,Bob,2,19,64,100,22,25,17
+3,Charlie,3,20,85,100,30,30,25`;
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'students_sample.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const handleViewAnalytics = async (student: Student) => {
     setSelectedStudent(student);
     setShowAnalyticsDialog(true);
@@ -219,13 +296,15 @@ export default function Students() {
     
     try {
       const analytics = await studentsApi.getAnalytics(student.student_id);
-      setStudentAnalytics(analytics);
+      setStudentAnalytics({
+        ...analytics,
+        name: analytics.name || student.name || `Student ${student.student_id}`,
+      });
     } catch (err) {
-      // Build analytics from local data if API fails
       const studentRecords = students.filter(s => s.student_id === student.student_id);
       const localAnalytics: StudentAnalytics = {
         student_id: student.student_id,
-        name: `Student ${student.student_id}`,
+        name: student.name || `Student ${student.student_id}`,
         total_papers: studentRecords.length,
         average_score: Math.round(
           studentRecords.reduce((acc, s) => acc + (s.marks_obtained / s.max_marks) * 100, 0) / studentRecords.length
@@ -245,6 +324,17 @@ export default function Students() {
       setIsAnalyticsLoading(false);
     }
   };
+
+  // Filter students by search query
+  const filteredStudents = students.filter(s => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      String(s.student_id).includes(q) ||
+      String(s.paper_id).includes(q)
+    );
+  });
 
   const difficultyPieData = studentAnalytics ? [
     { name: 'Easy', value: studentAnalytics.difficulty_breakdown.easy, fill: COLORS.easy },
@@ -279,7 +369,6 @@ export default function Students() {
             </p>
           </div>
 
-          {/* CSV Upload Button */}
           <div className="flex gap-3">
             <input
               type="file"
@@ -288,6 +377,10 @@ export default function Students() {
               onChange={handleFileUpload}
               className="hidden"
             />
+            <Button variant="outline" onClick={handleDownloadSampleCsv} className="gap-2">
+              <Download className="h-4 w-4" />
+              Sample CSV
+            </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
@@ -319,6 +412,9 @@ export default function Students() {
                 <code className="mt-1 block text-xs text-muted-foreground bg-muted p-2 rounded overflow-x-auto">
                   student_id,name,year,paper_id,marks_obtained,max_marks,easy,medium,hard
                 </code>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Download the sample CSV for the correct format with matching years and subjects.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -359,27 +455,9 @@ export default function Students() {
           <>
             {/* Stats */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                title="Total Students"
-                value={stats?.total_students || 0}
-                icon={Users}
-                variant="primary"
-                delay={0}
-              />
-              <StatCard
-                title="Active Students"
-                value={stats?.active_students || 0}
-                icon={GraduationCap}
-                variant="success"
-                delay={0.1}
-              />
-              <StatCard
-                title="Avg. Score"
-                value={`${stats?.avg_score || 0}%`}
-                icon={TrendingUp}
-                variant="warning"
-                delay={0.2}
-              />
+              <StatCard title="Total Students" value={stats?.total_students || 0} icon={Users} variant="primary" delay={0} />
+              <StatCard title="Active Students" value={stats?.active_students || 0} icon={GraduationCap} variant="success" delay={0.1} />
+              <StatCard title="Avg. Score" value={`${stats?.avg_score || 0}%`} icon={TrendingUp} variant="warning" delay={0.2} />
               <StatCard
                 title="Top Performer"
                 value={stats?.top_performer?.name || 'N/A'}
@@ -387,6 +465,17 @@ export default function Students() {
                 icon={Award}
                 variant="default"
                 delay={0.3}
+              />
+            </div>
+
+            {/* Search */}
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, student ID, or paper ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
               />
             </div>
 
@@ -400,7 +489,7 @@ export default function Students() {
                 <CardHeader>
                   <CardTitle>Student Directory</CardTitle>
                   <CardDescription>
-                    Click on a student to view detailed analytics
+                    {filteredStudents.length} record{filteredStudents.length !== 1 ? 's' : ''} found
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -408,41 +497,42 @@ export default function Students() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Student</TableHead>
+                        <TableHead className="text-center">Year</TableHead>
                         <TableHead className="text-center">Paper</TableHead>
-                        <TableHead className="text-center">Result</TableHead>
                         <TableHead className="text-center">Score</TableHead>
                         <TableHead className="text-center">Difficulty Breakdown</TableHead>
-                        <TableHead className="text-right">Analytics</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {students.map((student, index) => {
+                      {filteredStudents.map((student, index) => {
                         const scorePercent = Math.round((student.marks_obtained / student.max_marks) * 100);
+                        const displayName = student.name || `Student ${student.student_id}`;
                         return (
                           <motion.tr
-                            key={`${student.student_id}-${student.paper_id}`}
+                            key={`${student.result_id || student.student_id}-${student.paper_id}`}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.05 * index }}
+                            transition={{ delay: 0.05 * Math.min(index, 10) }}
                             className="group cursor-pointer hover:bg-muted/50"
                             onClick={() => handleViewAnalytics(student)}
                           >
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                  S{student.student_id}
+                                  {displayName.charAt(0).toUpperCase()}
                                 </div>
-                                <span className="font-medium">Student {student.student_id}</span>
+                                <div>
+                                  <span className="font-medium">{displayName}</span>
+                                  <p className="text-xs text-muted-foreground">ID: {student.student_id}</p>
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell className="text-center">
+                              {student.year ? <Badge variant="outline">Year {student.year}</Badge> : <span className="text-muted-foreground">-</span>}
+                            </TableCell>
+                            <TableCell className="text-center">
                               <Badge variant="outline">Paper #{student.paper_id}</Badge>
-                            </TableCell>
-                            <TableCell className="text-center text-muted-foreground">
-                              #{student.paper_id}
-                            </TableCell>
-                            <TableCell className="text-center text-muted-foreground">
-                              #{student.result_id}
                             </TableCell>
                             <TableCell className="text-center">
                               <span className={`font-semibold ${getScoreColor(scorePercent)}`}>
@@ -450,7 +540,7 @@ export default function Students() {
                               </span>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-2">
                                 <div className="flex items-center gap-1 text-xs">
                                   <span className="h-2 w-2 rounded-full bg-success" />
                                   <span>{student.easy}</span>
@@ -466,10 +556,19 @@ export default function Students() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" className="gap-1">
-                                <BarChart3 className="h-4 w-4" />
-                                <ChevronRight className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="sm" className="gap-1">
+                                  <BarChart3 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={(e) => handleDeleteStudent(student, e)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </motion.tr>
                         );
@@ -490,10 +589,10 @@ export default function Students() {
                 {selectedStudent && (
                   <>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
-                      S{selectedStudent.student_id}
+                      {(selectedStudent.name || 'S').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p>Student {selectedStudent.student_id}</p>
+                      <p>{studentAnalytics?.name || selectedStudent.name || `Student ${selectedStudent.student_id}`}</p>
                       <p className="text-sm font-normal text-muted-foreground">
                         Student Analytics
                       </p>
@@ -509,7 +608,6 @@ export default function Students() {
               </div>
             ) : studentAnalytics ? (
               <div className="space-y-6 mt-4">
-                {/* Quick Stats */}
                 <div className="grid grid-cols-3 gap-4">
                   <Card>
                     <CardContent className="p-4 text-center">
@@ -535,9 +633,7 @@ export default function Students() {
                   </Card>
                 </div>
 
-                {/* Charts */}
                 <div className="grid md:grid-cols-2 gap-6">
-                  {/* Difficulty Pie Chart */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">Difficulty Breakdown</CardTitle>
@@ -567,7 +663,6 @@ export default function Students() {
                     </CardContent>
                   </Card>
 
-                  {/* Radar Chart */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">Performance Radar</CardTitle>
@@ -593,7 +688,6 @@ export default function Students() {
                   </Card>
                 </div>
 
-                {/* Performance Trend Bar Chart */}
                 {performanceBarData.length > 0 && (
                   <Card>
                     <CardHeader>
@@ -615,7 +709,6 @@ export default function Students() {
                   </Card>
                 )}
 
-                {/* Difficulty Details */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Difficulty Performance</CardTitle>

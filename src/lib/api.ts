@@ -161,6 +161,10 @@ export const studentsApi = {
     const response = await api.get(`/students/students/analytics/${studentId}`);
     return response.data;
   },
+  delete: async (resultId: number) => {
+    const response = await api.delete(`/students/${resultId}`);
+    return response.data;
+  },
 };
 
 export default api;
