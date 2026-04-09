@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { academicApi, paperApi } from '@/lib/api';
+import { academicApi, paperApi, DEPARTMENTS, getDepartmentByCode } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -50,7 +50,7 @@ export default function GeneratePaper() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadDepartments();
+    setDepartments(DEPARTMENTS.map(d => ({ id: d.id, name: d.name })));
     loadYears();
   }, []);
 
@@ -78,14 +78,7 @@ export default function GeneratePaper() {
     }));
   };
 
-  const loadDepartments = async () => {
-    try {
-      const data = await academicApi.getDepartments();
-      setDepartments(normalizeOptions(data, 'department_id', 'department_name'));
-    } catch (error) {
-      console.warn('Departments endpoint not available:', error);
-    }
-  };
+  // Departments are hardcoded — no API call needed
 
   const loadYears = async () => {
     try {
@@ -101,9 +94,9 @@ export default function GeneratePaper() {
 
   const handleDepartmentChange = (deptId: string) => {
     setSelectedDepartment(deptId);
-    // If semester is already selected, reload subjects for the new department
+    // If semester is already selected, reload and filter subjects
     if (selectedSemester) {
-      loadSubjectsForSemester(parseInt(selectedSemester), parseInt(deptId));
+      loadSubjectsForSemester(parseInt(selectedSemester), deptId);
     }
     setSelectedSubject('');
     setSelectedUnit('');
@@ -132,10 +125,29 @@ export default function GeneratePaper() {
     }
   };
 
-  const loadSubjectsForSemester = async (semesterId: number, deptId?: number) => {
+  const loadSubjectsForSemester = async (semesterId: number, deptIdOverride?: string) => {
     try {
-      const data = await academicApi.getSubjects(semesterId, deptId || (selectedDepartment ? parseInt(selectedDepartment) : undefined));
-      setSubjects(normalizeOptions(data, 'subject_id', 'subject_name'));
+      const data = await academicApi.getSubjects(semesterId);
+      let allSubjects = normalizeOptions(data, 'subject_id', 'subject_name');
+      
+      // Client-side filter by department code prefix
+      const deptId = deptIdOverride || selectedDepartment;
+      if (deptId) {
+        const dept = DEPARTMENTS.find(d => d.id.toString() === deptId);
+        if (dept) {
+          // Also store subject codes for filtering
+          const subjectCodes: Record<number, string> = {};
+          (Array.isArray(data) ? data : []).forEach((s: any) => {
+            subjectCodes[s.subject_id || s.id] = s.subject_code || '';
+          });
+          allSubjects = allSubjects.filter(s => {
+            const code = subjectCodes[s.id] || '';
+            return code.toUpperCase().startsWith(dept.code);
+          });
+        }
+      }
+      
+      setSubjects(allSubjects);
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load subjects', variant: 'destructive' });
     }
