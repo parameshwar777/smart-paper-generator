@@ -21,12 +21,14 @@ interface SelectOption {
 }
 
 export default function GeneratePaper() {
+  const [departments, setDepartments] = useState<SelectOption[]>([]);
   const [years, setYears] = useState<SelectOption[]>([]);
   const [semesters, setSemesters] = useState<SelectOption[]>([]);
   const [subjects, setSubjects] = useState<SelectOption[]>([]);
   const [units, setUnits] = useState<SelectOption[]>([]);
   const [topics, setTopics] = useState<SelectOption[]>([]);
 
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
