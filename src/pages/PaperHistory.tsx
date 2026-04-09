@@ -447,6 +447,7 @@ export default function PaperHistoryPage() {
                   <TableRow>
                     <TableHead>Paper ID</TableHead>
                     <TableHead>Subject</TableHead>
+                    <TableHead>Department</TableHead>
                     <TableHead>AI Engine</TableHead>
                     <TableHead>Total Marks</TableHead>
                     <TableHead>Created</TableHead>
@@ -458,6 +459,11 @@ export default function PaperHistoryPage() {
                     <TableRow key={paper.id}>
                       <TableCell className="font-medium">#{paper.id}</TableCell>
                       <TableCell>{paper.subject_name || 'Question Paper'}</TableCell>
+                      <TableCell>
+                        {paper.department_name ? (
+                          <Badge variant="secondary" className="text-xs">{paper.department_name}</Badge>
+                        ) : '—'}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={getEngineVariant(paper.ai_engine)}>
                           {paper.ai_engine || 'OpenAI'}
