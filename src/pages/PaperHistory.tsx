@@ -385,6 +385,7 @@ export default function PaperHistoryPage() {
                               {paper.ai_engine || 'OpenAI'}
                             </Badge>
                           </div>
+                        </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
