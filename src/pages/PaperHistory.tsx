@@ -72,7 +72,7 @@ export default function PaperHistoryPage() {
 
   useEffect(() => {
     filterPapers();
-  }, [papers, searchQuery, engineFilter]);
+  }, [papers, searchQuery, engineFilter, deptFilter]);
 
   const loadData = async () => {
     try {
