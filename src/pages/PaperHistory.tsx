@@ -141,12 +141,17 @@ export default function PaperHistoryPage() {
       filtered = filtered.filter(
         (p) =>
           p.id.toString().includes(query) ||
-          (p.subject_name?.toLowerCase().includes(query))
+          (p.subject_name?.toLowerCase().includes(query)) ||
+          (p.department_name?.toLowerCase().includes(query))
       );
     }
 
     if (engineFilter !== 'all') {
       filtered = filtered.filter((p) => p.ai_engine?.toLowerCase() === engineFilter);
+    }
+
+    if (deptFilter !== 'all') {
+      filtered = filtered.filter((p) => p.department_name?.toLowerCase() === deptFilter.toLowerCase());
     }
 
     setFilteredPapers(filtered);
