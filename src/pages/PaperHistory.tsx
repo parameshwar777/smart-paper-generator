@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { paperApi, academicApi } from '@/lib/api';
+import { paperApi, academicApi, DEPARTMENTS, getDepartmentByCode } from '@/lib/api';
 import { Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -77,19 +77,13 @@ export default function PaperHistoryPage() {
 
   const loadData = async () => {
     try {
-      // Load departments
-      try {
-        const depts = await academicApi.getDepartments();
-        setDepartments((Array.isArray(depts) ? depts : []).map((d: any) => ({
-          id: d.department_id,
-          name: d.department_name || d.name || `Dept ${d.department_id}`,
-        })));
-      } catch { /* departments endpoint may not exist yet */ }
+      // Use hardcoded departments
+      setDepartments(DEPARTMENTS.map(d => ({ id: d.id, name: d.name })));
 
       // First fetch all subjects to build a lookup map
       const years = await academicApi.getYears();
       const subjectMap: Record<number, string> = {};
-      const subjectDeptMap: Record<number, string> = {};
+      const subjectCodeMap: Record<number, string> = {};
       
       for (const year of years) {
         const yearId = year.year_id || year.id;
@@ -100,7 +94,7 @@ export default function PaperHistoryPage() {
           for (const subj of subjects) {
             const subjId = subj.subject_id || subj.id;
             subjectMap[subjId] = subj.subject_name || subj.name || `Subject ${subjId}`;
-            subjectDeptMap[subjId] = subj.department_name || subj.department || '';
+            subjectCodeMap[subjId] = subj.subject_code || '';
           }
         }
       }
@@ -113,7 +107,7 @@ export default function PaperHistoryPage() {
         id: p.paper_id,
         subject_id: p.subject_id,
         subject_name: subjectMap[p.subject_id] || `Subject ${p.subject_id}`,
-        department_name: subjectDeptMap[p.subject_id] || '',
+        department_name: getDepartmentByCode(subjectCodeMap[p.subject_id] || ''),
         created_at: p.generated_at,
         total_marks: p.total_marks,
         ai_engine: ENGINE_MAP[p.ai_engine_id] || `Engine ${p.ai_engine_id}`,
