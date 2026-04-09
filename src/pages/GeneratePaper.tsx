@@ -306,6 +306,7 @@ export default function GeneratePaper() {
   };
 
   const completionSteps = [
+    { label: 'Department', complete: !!selectedDepartment },
     { label: 'Year', complete: !!selectedYear },
     { label: 'Semester', complete: !!selectedSemester },
     { label: 'Subject', complete: !!selectedSubject },
@@ -384,7 +385,7 @@ export default function GeneratePaper() {
                     </div>
                     <div>
                       <CardTitle>Academic Selection</CardTitle>
-                      <CardDescription>Choose year, semester, subject, and more</CardDescription>
+                      <CardDescription>Choose department, year, semester, subject, and more</CardDescription>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
@@ -394,6 +395,23 @@ export default function GeneratePaper() {
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
+                {/* Department */}
+                {departments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Select Department / Branch</Label>
+                    <Select value={selectedDepartment} onValueChange={handleDepartmentChange}>
+                      <SelectTrigger className="h-12 bg-background border-border hover:border-primary/50 transition-colors">
+                        <SelectValue placeholder="Select Department" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border-border">
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id.toString()}>{dept.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {/* Year & Semester */}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
