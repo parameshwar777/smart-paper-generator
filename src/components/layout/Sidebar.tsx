@@ -14,6 +14,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
+import { CreateAdminDialog } from '@/components/CreateAdminDialog';
+import { DEPARTMENTS } from '@/lib/api';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
