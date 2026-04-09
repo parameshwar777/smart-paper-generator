@@ -26,7 +26,6 @@ import {
   Area,
 } from 'recharts';
 
-// API response structure  
 interface PaperHistoryApi {
   paper_id: number;
   subject_id: number;
@@ -75,6 +74,28 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   Hard: 'hsl(0, 84%, 60%)',
 };
 
+// Helper to extract a dict from various possible shapes
+function extractDict(data: any, ...keys: string[]): { [key: string]: number } | undefined {
+  if (!data) return undefined;
+  for (const key of keys) {
+    const val = data[key];
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      return val;
+    }
+    // Handle array of {name/label, value/count} objects
+    if (Array.isArray(val) && val.length > 0) {
+      const dict: Record<string, number> = {};
+      for (const item of val) {
+        const name = item.name || item.label || item.key || item.level || String(item);
+        const value = item.value ?? item.count ?? item.total ?? 0;
+        if (name && typeof value === 'number') dict[name] = value;
+      }
+      if (Object.keys(dict).length > 0) return dict;
+    }
+  }
+  return undefined;
+}
+
 export default function Analytics() {
   const [searchParams] = useSearchParams();
   const [papers, setPapers] = useState<PaperHistory[]>([]);
@@ -96,7 +117,6 @@ export default function Analytics() {
 
   const loadPapers = async () => {
     try {
-      // Fetch subjects for name lookup
       const years = await academicApi.getYears();
       const subjectMap: Record<number, string> = {};
       
@@ -137,15 +157,25 @@ export default function Analytics() {
     setIsLoadingAnalytics(true);
     try {
       const data = await analyticsApi.getPaperAnalytics(paperId);
-      console.log('Analytics API response:', JSON.stringify(data, null, 2));
+      console.log('Analytics API raw response:', JSON.stringify(data, null, 2));
       
-      // Normalize keys - backend may use different naming conventions
+      // Robust normalization - try many possible key names and structures
       const normalized: Analytics = {
-        difficulty_distribution: data.difficulty_distribution || data.difficultyDistribution || data.difficulty,
-        bloom_taxonomy: data.bloom_taxonomy || data.blooms_taxonomy || data.bloomTaxonomy || data.blooms || data.bloom,
-        topic_coverage: data.topic_coverage || data.topicCoverage || data.topics,
-        marks_allocation: data.marks_allocation || data.marksAllocation || data.marks,
+        difficulty_distribution: extractDict(data, 
+          'difficulty_distribution', 'difficultyDistribution', 'difficulty', 
+          'difficulty_dist', 'difficultydistribution'),
+        bloom_taxonomy: extractDict(data, 
+          'bloom_taxonomy', 'blooms_taxonomy', 'bloomTaxonomy', 'blooms', 'bloom',
+          'bloomsTaxonomy', 'bloom_level', 'cognitive_level', 'bloom_levels'),
+        topic_coverage: extractDict(data, 
+          'topic_coverage', 'topicCoverage', 'topics', 'topic_dist',
+          'topic_distribution', 'topicDistribution'),
+        marks_allocation: extractDict(data, 
+          'marks_allocation', 'marksAllocation', 'marks', 'marks_dist',
+          'marks_distribution', 'marksDistribution', 'mark_allocation'),
       };
+      
+      console.log('Normalized analytics:', JSON.stringify(normalized, null, 2));
       setAnalytics(normalized);
     } catch (error) {
       toast({
@@ -164,23 +194,10 @@ export default function Analytics() {
     return Object.entries(data).map(([name, value]) => ({ name, value }));
   };
 
-  const formatRadialData = (data: { [key: string]: number } | undefined) => {
-    if (!data) return [];
-    const entries = Object.entries(data);
-    const maxValue = Math.max(...entries.map(([_, v]) => v));
-    return entries.map(([name, value], index) => ({
-      name,
-      value,
-      fill: CHART_COLORS[index % CHART_COLORS.length],
-      percentage: Math.round((value / maxValue) * 100),
-    }));
-  };
-
   const difficultyData = formatChartData(analytics?.difficulty_distribution);
   const bloomData = formatChartData(analytics?.bloom_taxonomy);
   const topicData = formatChartData(analytics?.topic_coverage);
   const marksData = formatChartData(analytics?.marks_allocation);
-  const radialBloomData = formatRadialData(analytics?.bloom_taxonomy);
 
   const totalQuestions = difficultyData.reduce((sum, d) => sum + d.value, 0);
 
@@ -198,7 +215,13 @@ export default function Analytics() {
     return null;
   };
 
-  const selectedPaperData = papers.find(p => p.id.toString() === selectedPaper);
+  const EmptyChartState = ({ title }: { title: string }) => (
+    <div className="flex h-80 flex-col items-center justify-center text-muted-foreground">
+      <AlertCircle className="h-8 w-8 mb-2 opacity-50" />
+      <p className="text-sm">No {title} data available</p>
+      <p className="text-xs mt-1">Check console for raw API response</p>
+    </div>
+  );
 
   return (
     <DashboardLayout>
@@ -216,7 +239,6 @@ export default function Analytics() {
             </p>
           </div>
 
-          {/* Paper Selection */}
           <div className="w-full md:w-80">
             {isLoadingPapers ? (
               <div className="flex items-center gap-2 h-12 px-4 rounded-lg border border-border bg-muted/30">
@@ -240,7 +262,6 @@ export default function Analytics() {
           </div>
         </motion.div>
 
-        {/* Content */}
         <AnimatePresence mode="wait">
           {!selectedPaper ? (
             <motion.div
@@ -256,7 +277,7 @@ export default function Analytics() {
                   </div>
                   <h3 className="text-xl font-semibold">Select a Paper</h3>
                   <p className="text-muted-foreground mt-2 text-center max-w-md">
-                    Choose a paper from the dropdown above to view detailed analytics including difficulty distribution, Bloom's taxonomy, and topic coverage.
+                    Choose a paper from the dropdown above to view detailed analytics.
                   </p>
                 </CardContent>
               </Card>
@@ -284,11 +305,7 @@ export default function Analytics() {
             >
               {/* Quick Stats */}
               <div className="grid gap-4 md:grid-cols-4">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                   <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                     <CardContent className="p-6">
                       <div className="flex items-center gap-4">
@@ -304,11 +321,7 @@ export default function Analytics() {
                   </Card>
                 </motion.div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                   <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20">
                     <CardContent className="p-6">
                       <div className="flex items-center gap-4">
@@ -324,11 +337,7 @@ export default function Analytics() {
                   </Card>
                 </motion.div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                   <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20">
                     <CardContent className="p-6">
                       <div className="flex items-center gap-4">
@@ -344,11 +353,7 @@ export default function Analytics() {
                   </Card>
                 </motion.div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
                   <Card className="bg-gradient-to-br from-accent/10 to-accent/5 border-accent/20">
                     <CardContent className="p-6">
                       <div className="flex items-center gap-4">
@@ -367,12 +372,8 @@ export default function Analytics() {
 
               {/* Charts Grid */}
               <div className="grid gap-6 lg:grid-cols-2">
-                {/* Difficulty Distribution - Donut Chart */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                >
+                {/* Difficulty Distribution */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                   <Card className="overflow-hidden">
                     <CardHeader className="border-b border-border bg-muted/30">
                       <div className="flex items-center gap-3">
@@ -386,55 +387,56 @@ export default function Analytics() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPie>
-                            <Pie
-                              data={difficultyData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={70}
-                              outerRadius={110}
-                              paddingAngle={4}
-                              dataKey="value"
-                              label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                              labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
-                            >
-                              {difficultyData.map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={DIFFICULTY_COLORS[entry.name] || CHART_COLORS[index % CHART_COLORS.length]}
-                                  stroke="hsl(var(--background))"
-                                  strokeWidth={2}
-                                />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<CustomTooltip />} />
-                          </RechartsPie>
-                        </ResponsiveContainer>
-                      </div>
-                      {/* Legend */}
-                      <div className="flex justify-center gap-6 mt-4">
-                        {difficultyData.map((entry, index) => (
-                          <div key={entry.name} className="flex items-center gap-2">
-                            <div 
-                              className="h-3 w-3 rounded-full" 
-                              style={{ backgroundColor: DIFFICULTY_COLORS[entry.name] || CHART_COLORS[index] }}
-                            />
-                            <span className="text-sm">{entry.name}: {entry.value}</span>
+                      {difficultyData.length > 0 ? (
+                        <>
+                          <div className="h-80">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <RechartsPie>
+                                <Pie
+                                  data={difficultyData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={70}
+                                  outerRadius={110}
+                                  paddingAngle={4}
+                                  dataKey="value"
+                                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                                  labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+                                >
+                                  {difficultyData.map((entry, index) => (
+                                    <Cell 
+                                      key={`cell-${index}`} 
+                                      fill={DIFFICULTY_COLORS[entry.name] || CHART_COLORS[index % CHART_COLORS.length]}
+                                      stroke="hsl(var(--background))"
+                                      strokeWidth={2}
+                                    />
+                                  ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                              </RechartsPie>
+                            </ResponsiveContainer>
                           </div>
-                        ))}
-                      </div>
+                          <div className="flex justify-center gap-6 mt-4">
+                            {difficultyData.map((entry, index) => (
+                              <div key={entry.name} className="flex items-center gap-2">
+                                <div 
+                                  className="h-3 w-3 rounded-full" 
+                                  style={{ backgroundColor: DIFFICULTY_COLORS[entry.name] || CHART_COLORS[index] }}
+                                />
+                                <span className="text-sm">{entry.name}: {entry.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <EmptyChartState title="difficulty distribution" />
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
 
-                {/* Bloom's Taxonomy - Horizontal Bar */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 }}
-                >
+                {/* Bloom's Taxonomy */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
                   <Card className="overflow-hidden">
                     <CardHeader className="border-b border-border bg-muted/30">
                       <div className="flex items-center gap-3">
@@ -448,42 +450,39 @@ export default function Analytics() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={bloomData} layout="vertical" barSize={24}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                            <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                            <YAxis 
-                              dataKey="name" 
-                              type="category" 
-                              width={100} 
-                              stroke="hsl(var(--muted-foreground))" 
-                              fontSize={12}
-                              tickLine={false}
-                              axisLine={false}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Bar 
-                              dataKey="value" 
-                              radius={[0, 8, 8, 0]}
-                            >
-                              {bloomData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
+                      {bloomData.length > 0 ? (
+                        <div className="h-80">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={bloomData} layout="vertical" barSize={24}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                              <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                              <YAxis 
+                                dataKey="name" 
+                                type="category" 
+                                width={100} 
+                                stroke="hsl(var(--muted-foreground))" 
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                              />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Bar dataKey="value" radius={[0, 8, 8, 0]}>
+                                {bloomData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <EmptyChartState title="Bloom's taxonomy" />
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
 
-                {/* Topic Coverage - Area Chart */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                >
+                {/* Topic Coverage */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
                   <Card className="overflow-hidden">
                     <CardHeader className="border-b border-border bg-muted/30">
                       <div className="flex items-center gap-3">
@@ -497,47 +496,47 @@ export default function Analytics() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={topicData}>
-                            <defs>
-                              <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.4}/>
-                                <stop offset="95%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                            <XAxis 
-                              dataKey="name" 
-                              stroke="hsl(var(--muted-foreground))" 
-                              fontSize={11}
-                              tickLine={false}
-                              angle={-45}
-                              textAnchor="end"
-                              height={80}
-                            />
-                            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Area 
-                              type="monotone" 
-                              dataKey="value" 
-                              stroke="hsl(38, 92%, 50%)" 
-                              strokeWidth={2}
-                              fill="url(#colorValue)" 
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
+                      {topicData.length > 0 ? (
+                        <div className="h-80">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={topicData}>
+                              <defs>
+                                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.4}/>
+                                  <stop offset="95%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                              <XAxis 
+                                dataKey="name" 
+                                stroke="hsl(var(--muted-foreground))" 
+                                fontSize={11}
+                                tickLine={false}
+                                angle={-45}
+                                textAnchor="end"
+                                height={80}
+                              />
+                              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                              <Tooltip content={<CustomTooltip />} />
+                              <Area 
+                                type="monotone" 
+                                dataKey="value" 
+                                stroke="hsl(38, 92%, 50%)" 
+                                strokeWidth={2}
+                                fill="url(#colorValue)" 
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <EmptyChartState title="topic coverage" />
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
 
-                {/* Marks Allocation - Donut Chart */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.45 }}
-                >
+                {/* Marks Allocation */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
                   <Card className="overflow-hidden">
                     <CardHeader className="border-b border-border bg-muted/30">
                       <div className="flex items-center gap-3">
@@ -551,33 +550,37 @@ export default function Analytics() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPie>
-                            <Pie
-                              data={marksData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={70}
-                              outerRadius={110}
-                              paddingAngle={4}
-                              dataKey="value"
-                              label={({ name, value }) => `${name}: ${value}`}
-                              labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
-                            >
-                              {marksData.map((_, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={CHART_COLORS[index % CHART_COLORS.length]} 
-                                  stroke="hsl(var(--background))"
-                                  strokeWidth={2}
-                                />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<CustomTooltip />} />
-                          </RechartsPie>
-                        </ResponsiveContainer>
-                      </div>
+                      {marksData.length > 0 ? (
+                        <div className="h-80">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RechartsPie>
+                              <Pie
+                                data={marksData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={70}
+                                outerRadius={110}
+                                paddingAngle={4}
+                                dataKey="value"
+                                label={({ name, value }) => `${name}: ${value}`}
+                                labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+                              >
+                                {marksData.map((_, index) => (
+                                  <Cell 
+                                    key={`cell-${index}`} 
+                                    fill={CHART_COLORS[index % CHART_COLORS.length]} 
+                                    stroke="hsl(var(--background))"
+                                    strokeWidth={2}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip content={<CustomTooltip />} />
+                            </RechartsPie>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <EmptyChartState title="marks allocation" />
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
