@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { paperApi, academicApi } from '@/lib/api';
+import { Building2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -58,6 +59,8 @@ export default function PaperHistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [engineFilter, setEngineFilter] = useState<string>('all');
+  const [deptFilter, setDeptFilter] = useState<string>('all');
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [subjectsMap, setSubjectsMap] = useState<Record<number, string>>({});
   const { toast } = useToast();
