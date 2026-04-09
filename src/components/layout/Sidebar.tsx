@@ -27,8 +27,9 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const userDept = user?.department_id ? DEPARTMENTS.find(d => d.id === user.department_id) : null;
 
   return (
     <motion.aside
