@@ -375,10 +375,16 @@ export default function PaperHistoryPage() {
                               </CardDescription>
                             </div>
                           </div>
-                          <Badge variant={getEngineVariant(paper.ai_engine)}>
-                            {paper.ai_engine || 'OpenAI'}
-                          </Badge>
-                        </div>
+                          <div className="flex flex-wrap gap-1">
+                            {paper.department_name && (
+                              <Badge variant="secondary" className="text-xs">
+                                {paper.department_name}
+                              </Badge>
+                            )}
+                            <Badge variant={getEngineVariant(paper.ai_engine)}>
+                              {paper.ai_engine || 'OpenAI'}
+                            </Badge>
+                          </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
