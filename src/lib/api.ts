@@ -61,12 +61,23 @@ export const authApi = {
   },
 };
 
+// Hardcoded departments with subject code prefixes
+export const DEPARTMENTS = [
+  { id: 1, name: 'CSE (AI & ML)', code: 'AIML' },
+  { id: 2, name: 'Data Science', code: 'DS' },
+  { id: 3, name: 'Electronics & Communication (ECE)', code: 'ECE' },
+  { id: 4, name: 'CSE (IoT)', code: 'IOT' },
+  { id: 5, name: 'CSE (Cyber Security)', code: 'CS' },
+];
+
+// Get department by subject code prefix
+export const getDepartmentByCode = (subjectCode: string): string => {
+  const dept = DEPARTMENTS.find(d => subjectCode?.toUpperCase().startsWith(d.code));
+  return dept?.name || '';
+};
+
 // Academic API
 export const academicApi = {
-  getDepartments: async () => {
-    const response = await api.get('/academic/departments');
-    return response.data;
-  },
   getYears: async () => {
     const response = await api.get('/academic/years');
     return response.data;
@@ -75,9 +86,8 @@ export const academicApi = {
     const response = await api.get(`/academic/semesters/${yearId}`);
     return response.data;
   },
-  getSubjects: async (semesterId: number, departmentId?: number) => {
-    const params = departmentId ? { department_id: departmentId } : {};
-    const response = await api.get(`/academic/subjects/${semesterId}`, { params });
+  getSubjects: async (semesterId: number) => {
+    const response = await api.get(`/academic/subjects/${semesterId}`);
     return response.data;
   },
   getUnits: async (subjectId: number) => {
