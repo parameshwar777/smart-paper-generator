@@ -234,17 +234,16 @@ export default function GeneratePaper() {
       let payload: any;
 
       if (isFinalPaper) {
-        // Final paper mode: all units, no difficulty_distribution needed
         payload = {
           subject_id: parseInt(selectedSubject),
           paper_model_id: 1,
           ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
           paper_mode: 'final',
           unit_ids: units.map(u => u.id),
+          total_marks: totalMarks,
           generated_by: user?.user_id || 1,
         };
       } else {
-        // Unit mode: single unit + topic with difficulty
         const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
         payload = {
           subject_id: parseInt(selectedSubject),
@@ -253,6 +252,7 @@ export default function GeneratePaper() {
           paper_mode: 'unit',
           selected_unit_id: parseInt(selectedUnit),
           selected_topic: topicName,
+          total_marks: totalMarks,
           difficulty_distribution: {
             Easy: Math.round(difficulty.easy / 10),
             Medium: Math.round(difficulty.medium / 10),
