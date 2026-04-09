@@ -2,9 +2,16 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { authApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
+interface UserInfo {
+  user_id: number;
+  username: string;
+  department_id?: number;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
+  user: UserInfo | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   token: string | null;
@@ -12,15 +19,37 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const base64 = token.split('.')[1];
+    const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  const extractUser = (accessToken: string): UserInfo | null => {
+    const payload = decodeJwtPayload(accessToken);
+    if (!payload) return null;
+    return {
+      user_id: payload.user_id || payload.id || 0,
+      username: payload.sub || payload.username || '',
+      department_id: payload.department_id,
+    };
+  };
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
       setToken(storedToken);
+      setUser(extractUser(storedToken));
     }
     setIsLoading(false);
   }, []);
@@ -31,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const accessToken = response.access_token;
       localStorage.setItem('token', accessToken);
       setToken(accessToken);
+      setUser(extractUser(accessToken));
       toast({
         title: "Welcome back!",
         description: "You have successfully logged in.",
@@ -49,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem('token');
     setToken(null);
+    setUser(null);
     toast({
       title: "Logged out",
       description: "You have been logged out successfully.",
@@ -60,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         isAuthenticated: !!token,
         isLoading,
+        user,
         login,
         logout,
         token,

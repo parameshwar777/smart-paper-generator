@@ -36,6 +36,10 @@ api.interceptors.response.use(
 
 // Auth API
 export const authApi = {
+  register: async (username: string, password: string, department_id: number) => {
+    const response = await api.post('/auth/register', { username, password, department_id });
+    return response.data;
+  },
   login: async (username: string, password: string) => {
     // Prefer JSON body (matches typical Swagger "Try it out" payload)
     try {

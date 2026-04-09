@@ -14,6 +14,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
+import { CreateAdminDialog } from '@/components/CreateAdminDialog';
+import { DEPARTMENTS } from '@/lib/api';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -25,8 +27,9 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const userDept = user?.department_id ? DEPARTMENTS.find(d => d.id === user.department_id) : null;
 
   return (
     <motion.aside
@@ -100,7 +103,17 @@ export function Sidebar() {
       </button>
 
       {/* Footer */}
-      <div className="border-t border-sidebar-border p-3">
+      <div className="border-t border-sidebar-border p-3 space-y-2">
+        {/* User info */}
+        {!collapsed && user && (
+          <div className="rounded-lg bg-sidebar-accent/30 px-3 py-2">
+            <p className="text-xs font-medium text-sidebar-foreground truncate">{user.username}</p>
+            {userDept && (
+              <p className="text-xs text-muted-foreground truncate">{userDept.name}</p>
+            )}
+          </div>
+        )}
+        {!collapsed && <CreateAdminDialog />}
         <button
           onClick={logout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
