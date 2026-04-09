@@ -36,6 +36,7 @@ interface PaperHistory {
   id: number;
   subject_id: number;
   subject_name: string;
+  department_name: string;
   created_at: string;
   total_marks: number;
   ai_engine: string;
@@ -76,11 +77,20 @@ export default function PaperHistoryPage() {
 
   const loadData = async () => {
     try {
+      // Load departments
+      try {
+        const depts = await academicApi.getDepartments();
+        setDepartments((Array.isArray(depts) ? depts : []).map((d: any) => ({
+          id: d.department_id,
+          name: d.department_name || d.name || `Dept ${d.department_id}`,
+        })));
+      } catch { /* departments endpoint may not exist yet */ }
+
       // First fetch all subjects to build a lookup map
       const years = await academicApi.getYears();
       const subjectMap: Record<number, string> = {};
+      const subjectDeptMap: Record<number, string> = {};
       
-      // Fetch subjects for all years/semesters
       for (const year of years) {
         const yearId = year.year_id || year.id;
         const semesters = await academicApi.getSemesters(yearId);
@@ -90,6 +100,7 @@ export default function PaperHistoryPage() {
           for (const subj of subjects) {
             const subjId = subj.subject_id || subj.id;
             subjectMap[subjId] = subj.subject_name || subj.name || `Subject ${subjId}`;
+            subjectDeptMap[subjId] = subj.department_name || subj.department || '';
           }
         }
       }
@@ -98,11 +109,11 @@ export default function PaperHistoryPage() {
       // Now fetch paper history
       const data: PaperHistoryApi[] = await paperApi.getHistory();
       
-      // Map to UI structure
       const mapped: PaperHistory[] = (Array.isArray(data) ? data : []).map((p) => ({
         id: p.paper_id,
         subject_id: p.subject_id,
         subject_name: subjectMap[p.subject_id] || `Subject ${p.subject_id}`,
+        department_name: subjectDeptMap[p.subject_id] || '',
         created_at: p.generated_at,
         total_marks: p.total_marks,
         ai_engine: ENGINE_MAP[p.ai_engine_id] || `Engine ${p.ai_engine_id}`,
