@@ -414,7 +414,7 @@ export default function PaperHistoryPage() {
                             variant="outline"
                             size="sm"
                             className="flex-1"
-                            onClick={() => window.open(paperApi.downloadPdf(paper.id), '_blank')}
+                            onClick={() => paperApi.downloadPdf(paper.id)}
                           >
                             <Download className="mr-2 h-4 w-4" />
                             PDF
@@ -482,7 +482,7 @@ export default function PaperHistoryPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => window.open(paperApi.downloadPdf(paper.id), '_blank')}
+                            onClick={() => paperApi.downloadPdf(paper.id)}
                           >
                             <Download className="h-4 w-4" />
                           </Button>
