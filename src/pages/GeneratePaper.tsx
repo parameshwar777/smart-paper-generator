@@ -99,6 +99,20 @@ export default function GeneratePaper() {
     }
   };
 
+  const handleDepartmentChange = (deptId: string) => {
+    setSelectedDepartment(deptId);
+    // If semester is already selected, reload subjects for the new department
+    if (selectedSemester) {
+      loadSubjectsForSemester(parseInt(selectedSemester), parseInt(deptId));
+    }
+    setSelectedSubject('');
+    setSelectedUnit('');
+    setSelectedTopic('');
+    setSubjects([]);
+    setUnits([]);
+    setTopics([]);
+  };
+
   const handleYearChange = async (yearId: string) => {
     setSelectedYear(yearId);
     setSelectedSemester('');
@@ -118,6 +132,15 @@ export default function GeneratePaper() {
     }
   };
 
+  const loadSubjectsForSemester = async (semesterId: number, deptId?: number) => {
+    try {
+      const data = await academicApi.getSubjects(semesterId, deptId || (selectedDepartment ? parseInt(selectedDepartment) : undefined));
+      setSubjects(normalizeOptions(data, 'subject_id', 'subject_name'));
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to load subjects', variant: 'destructive' });
+    }
+  };
+
   const handleSemesterChange = async (semesterId: string) => {
     setSelectedSemester(semesterId);
     setSelectedSubject('');
@@ -127,12 +150,7 @@ export default function GeneratePaper() {
     setUnits([]);
     setTopics([]);
 
-    try {
-      const data = await academicApi.getSubjects(parseInt(semesterId));
-      setSubjects(normalizeOptions(data, 'subject_id', 'subject_name'));
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to load subjects', variant: 'destructive' });
-    }
+    await loadSubjectsForSemester(parseInt(semesterId));
   };
 
   const handleSubjectChange = async (subjectId: string) => {
