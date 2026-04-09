@@ -137,7 +137,16 @@ export default function Analytics() {
     setIsLoadingAnalytics(true);
     try {
       const data = await analyticsApi.getPaperAnalytics(paperId);
-      setAnalytics(data);
+      console.log('Analytics API response:', JSON.stringify(data, null, 2));
+      
+      // Normalize keys - backend may use different naming conventions
+      const normalized: Analytics = {
+        difficulty_distribution: data.difficulty_distribution || data.difficultyDistribution || data.difficulty,
+        bloom_taxonomy: data.bloom_taxonomy || data.blooms_taxonomy || data.bloomTaxonomy || data.blooms || data.bloom,
+        topic_coverage: data.topic_coverage || data.topicCoverage || data.topics,
+        marks_allocation: data.marks_allocation || data.marksAllocation || data.marks,
+      };
+      setAnalytics(normalized);
     } catch (error) {
       toast({
         title: 'Error',
