@@ -50,6 +50,7 @@ export default function GeneratePaper() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    loadDepartments();
     loadYears();
   }, []);
 
