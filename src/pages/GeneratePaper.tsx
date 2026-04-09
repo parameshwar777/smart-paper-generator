@@ -10,6 +10,7 @@ import { Slider } from '@/components/ui/slider';
 import { academicApi, paperApi, DEPARTMENTS, getDepartmentByCode } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
@@ -48,6 +49,7 @@ export default function GeneratePaper() {
 
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     setDepartments(DEPARTMENTS.map(d => ({ id: d.id, name: d.name })));
@@ -239,7 +241,7 @@ export default function GeneratePaper() {
           ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
           paper_mode: 'final',
           unit_ids: units.map(u => u.id),
-          generated_by: 1,
+          generated_by: user?.user_id || 1,
         };
       } else {
         // Unit mode: single unit + topic with difficulty
@@ -261,7 +263,7 @@ export default function GeneratePaper() {
             Medium: 5,
             Hard: 10,
           },
-          generated_by: 1,
+          generated_by: user?.user_id || 1,
         };
       }
 
