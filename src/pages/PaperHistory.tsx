@@ -83,7 +83,7 @@ export default function PaperHistoryPage() {
       // First fetch all subjects to build a lookup map
       const years = await academicApi.getYears();
       const subjectMap: Record<number, string> = {};
-      const subjectDeptMap: Record<number, string> = {};
+      const subjectCodeMap: Record<number, string> = {};
       
       for (const year of years) {
         const yearId = year.year_id || year.id;
@@ -94,7 +94,7 @@ export default function PaperHistoryPage() {
           for (const subj of subjects) {
             const subjId = subj.subject_id || subj.id;
             subjectMap[subjId] = subj.subject_name || subj.name || `Subject ${subjId}`;
-            subjectDeptMap[subjId] = subj.department_name || subj.department || '';
+            subjectCodeMap[subjId] = subj.subject_code || '';
           }
         }
       }
@@ -107,7 +107,7 @@ export default function PaperHistoryPage() {
         id: p.paper_id,
         subject_id: p.subject_id,
         subject_name: subjectMap[p.subject_id] || `Subject ${p.subject_id}`,
-        department_name: subjectDeptMap[p.subject_id] || '',
+        department_name: getDepartmentByCode(subjectCodeMap[p.subject_id] || ''),
         created_at: p.generated_at,
         total_marks: p.total_marks,
         ai_engine: ENGINE_MAP[p.ai_engine_id] || `Engine ${p.ai_engine_id}`,
