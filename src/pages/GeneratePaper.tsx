@@ -235,30 +235,25 @@ export default function GeneratePaper() {
       let payload: any;
 
       if (isFinalPaper) {
+        const computedMarks = units.length * 2 * 7; // 2 questions per unit, 7 marks each
         payload = {
           subject_id: parseInt(selectedSubject),
           paper_model_id: 1,
           ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
           paper_mode: 'final',
           unit_ids: units.map(u => u.id),
-          total_marks: totalMarks,
+          total_marks: computedMarks,
           generated_by: user?.user_id || 1,
         };
       } else {
         const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
-        const easyMarks = 2;
-        const mediumMarks = 5;
-        const hardMarks = 10;
+        const marksPerQuestion = 7;
 
-        // Calculate how many marks each difficulty level should contribute
-        const easyTotal = Math.round(totalMarks * difficulty.easy / 100);
-        const hardTotal = Math.round(totalMarks * difficulty.hard / 100);
-        const mediumTotal = totalMarks - easyTotal - hardTotal;
-
-        // Convert to question counts
-        const easyCount = Math.round(easyTotal / easyMarks);
-        const mediumCount = Math.round(mediumTotal / mediumMarks);
-        const hardCount = Math.round(hardTotal / hardMarks);
+        // Calculate question counts based on difficulty distribution
+        const easyCount = Math.round(numberOfQuestions * difficulty.easy / 100);
+        const hardCount = Math.round(numberOfQuestions * difficulty.hard / 100);
+        const mediumCount = numberOfQuestions - easyCount - hardCount;
+        const computedMarks = numberOfQuestions * marksPerQuestion;
 
         payload = {
           subject_id: parseInt(selectedSubject),
@@ -267,16 +262,16 @@ export default function GeneratePaper() {
           paper_mode: 'unit',
           selected_unit_id: parseInt(selectedUnit),
           selected_topic: topicName,
-          total_marks: totalMarks,
+          total_marks: computedMarks,
           difficulty_distribution: {
             Easy: easyCount,
             Medium: mediumCount,
             Hard: hardCount,
           },
           marks_map: {
-            Easy: easyMarks,
-            Medium: mediumMarks,
-            Hard: hardMarks,
+            Easy: marksPerQuestion,
+            Medium: marksPerQuestion,
+            Hard: marksPerQuestion,
           },
           generated_by: user?.user_id || 1,
         };
