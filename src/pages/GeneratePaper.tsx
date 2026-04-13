@@ -608,23 +608,36 @@ export default function GeneratePaper() {
                   </div>
                 </div>
 
-                {/* Total Marks Input */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Total Marks</Label>
-                  <div className="flex items-center gap-4">
-                    <Slider
-                      value={[totalMarks]}
-                      onValueChange={([value]) => setTotalMarks(value)}
-                      min={25}
-                      max={200}
-                      step={5}
-                      className="flex-1"
-                    />
-                    <div className="flex h-12 w-20 items-center justify-center rounded-lg border border-border bg-muted/30 font-semibold">
-                      {totalMarks}
+                {/* Number of Questions & Total Marks */}
+                {!isFinalPaper && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Number of Questions (7 marks each)</Label>
+                    <div className="flex items-center gap-4">
+                      <Slider
+                        value={[numberOfQuestions]}
+                        onValueChange={([value]) => setNumberOfQuestions(value)}
+                        min={1}
+                        max={20}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <div className="flex h-12 w-20 items-center justify-center rounded-lg border border-border bg-muted/30 font-semibold">
+                        {numberOfQuestions}
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Total Marks: <span className="font-semibold">{numberOfQuestions * 7}</span>
+                    </p>
                   </div>
-                </div>
+                )}
+                {isFinalPaper && units.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Final Paper Summary</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {units.length} units × 2 questions × 7 marks = <span className="font-semibold">{units.length * 2 * 7} marks</span>
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
