@@ -38,6 +38,7 @@ export default function GeneratePaper() {
   const [aiEngine, setAiEngine] = useState<string>('openai');
   const [difficulty, setDifficulty] = useState({ easy: 30, medium: 50, hard: 20 });
   const [totalMarks, setTotalMarks] = useState<number>(70);
+  const [numberOfQuestions, setNumberOfQuestions] = useState<number>(10);
 
   // Final Paper mode: include all units
   const [isFinalPaper, setIsFinalPaper] = useState(false);

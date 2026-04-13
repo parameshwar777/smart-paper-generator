@@ -71,7 +71,7 @@ export const DEPARTMENTS = [
   { id: 2, name: 'Data Science', code: 'DS' },
   { id: 3, name: 'Electronics & Communication (ECE)', code: 'ECE' },
   { id: 4, name: 'CSE (IoT)', code: 'IOT' },
-  { id: 5, name: 'CSE (Cyber Security)', code: 'CS' },
+  { id: 5, name: 'CSE (Cyber Security)', code: 'CYB' },
 ];
 
 // Get department by subject code prefix
