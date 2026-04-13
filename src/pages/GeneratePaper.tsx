@@ -817,7 +817,11 @@ export default function GeneratePaper() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total Marks</span>
-                          <span className="font-medium">{totalMarks}</span>
+                          <span className="font-medium">{isFinalPaper ? units.length * 2 * 7 : numberOfQuestions * 7}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Questions</span>
+                          <span className="font-medium">{isFinalPaper ? `${units.length * 2} (2/unit)` : numberOfQuestions} × 7 marks</span>
                         </div>
                       </div>
 
