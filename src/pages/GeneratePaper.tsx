@@ -38,6 +38,7 @@ export default function GeneratePaper() {
   const [aiEngine, setAiEngine] = useState<string>('openai');
   const [difficulty, setDifficulty] = useState({ easy: 30, medium: 50, hard: 20 });
   const [totalMarks, setTotalMarks] = useState<number>(70);
+  const [numberOfQuestions, setNumberOfQuestions] = useState<number>(10);
 
   // Final Paper mode: include all units
   const [isFinalPaper, setIsFinalPaper] = useState(false);
@@ -234,30 +235,25 @@ export default function GeneratePaper() {
       let payload: any;
 
       if (isFinalPaper) {
+        const computedMarks = units.length * 2 * 7; // 2 questions per unit, 7 marks each
         payload = {
           subject_id: parseInt(selectedSubject),
           paper_model_id: 1,
           ai_engine: aiEngine === 'openai' ? 'OPENAI' : 'RULE_ML_HYBRID',
           paper_mode: 'final',
           unit_ids: units.map(u => u.id),
-          total_marks: totalMarks,
+          total_marks: computedMarks,
           generated_by: user?.user_id || 1,
         };
       } else {
         const topicName = topics.find(t => t.id.toString() === selectedTopic)?.name || '';
-        const easyMarks = 2;
-        const mediumMarks = 5;
-        const hardMarks = 10;
+        const marksPerQuestion = 7;
 
-        // Calculate how many marks each difficulty level should contribute
-        const easyTotal = Math.round(totalMarks * difficulty.easy / 100);
-        const hardTotal = Math.round(totalMarks * difficulty.hard / 100);
-        const mediumTotal = totalMarks - easyTotal - hardTotal;
-
-        // Convert to question counts
-        const easyCount = Math.round(easyTotal / easyMarks);
-        const mediumCount = Math.round(mediumTotal / mediumMarks);
-        const hardCount = Math.round(hardTotal / hardMarks);
+        // Calculate question counts based on difficulty distribution
+        const easyCount = Math.round(numberOfQuestions * difficulty.easy / 100);
+        const hardCount = Math.round(numberOfQuestions * difficulty.hard / 100);
+        const mediumCount = numberOfQuestions - easyCount - hardCount;
+        const computedMarks = numberOfQuestions * marksPerQuestion;
 
         payload = {
           subject_id: parseInt(selectedSubject),
@@ -266,16 +262,16 @@ export default function GeneratePaper() {
           paper_mode: 'unit',
           selected_unit_id: parseInt(selectedUnit),
           selected_topic: topicName,
-          total_marks: totalMarks,
+          total_marks: computedMarks,
           difficulty_distribution: {
             Easy: easyCount,
             Medium: mediumCount,
             Hard: hardCount,
           },
           marks_map: {
-            Easy: easyMarks,
-            Medium: mediumMarks,
-            Hard: hardMarks,
+            Easy: marksPerQuestion,
+            Medium: marksPerQuestion,
+            Hard: marksPerQuestion,
           },
           generated_by: user?.user_id || 1,
         };
@@ -612,23 +608,36 @@ export default function GeneratePaper() {
                   </div>
                 </div>
 
-                {/* Total Marks Input */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Total Marks</Label>
-                  <div className="flex items-center gap-4">
-                    <Slider
-                      value={[totalMarks]}
-                      onValueChange={([value]) => setTotalMarks(value)}
-                      min={25}
-                      max={200}
-                      step={5}
-                      className="flex-1"
-                    />
-                    <div className="flex h-12 w-20 items-center justify-center rounded-lg border border-border bg-muted/30 font-semibold">
-                      {totalMarks}
+                {/* Number of Questions & Total Marks */}
+                {!isFinalPaper && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Number of Questions (7 marks each)</Label>
+                    <div className="flex items-center gap-4">
+                      <Slider
+                        value={[numberOfQuestions]}
+                        onValueChange={([value]) => setNumberOfQuestions(value)}
+                        min={1}
+                        max={20}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <div className="flex h-12 w-20 items-center justify-center rounded-lg border border-border bg-muted/30 font-semibold">
+                        {numberOfQuestions}
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Total Marks: <span className="font-semibold">{numberOfQuestions * 7}</span>
+                    </p>
                   </div>
-                </div>
+                )}
+                {isFinalPaper && units.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Final Paper Summary</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {units.length} units × 2 questions × 7 marks = <span className="font-semibold">{units.length * 2 * 7} marks</span>
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -808,7 +817,11 @@ export default function GeneratePaper() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total Marks</span>
-                          <span className="font-medium">{totalMarks}</span>
+                          <span className="font-medium">{isFinalPaper ? units.length * 2 * 7 : numberOfQuestions * 7}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Questions</span>
+                          <span className="font-medium">{isFinalPaper ? `${units.length * 2} (2/unit)` : numberOfQuestions} × 7 marks</span>
                         </div>
                       </div>
 
